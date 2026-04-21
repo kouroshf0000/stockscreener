@@ -4,14 +4,23 @@ import asyncio
 import json
 import logging
 from datetime import datetime, timezone, timedelta
-from decimal import Decimal
 from typing import Literal
 
+from anthropic import AsyncAnthropic
 from pydantic import BaseModel, ConfigDict, Field
 
 from backend.app.config import get_settings
 from backend.app.supabase_client import get_supabase
-from backend.trading.alpaca_trader import get_open_positions, _get_client
+from backend.trading.alpaca_trader import get_open_positions, _get_client as _get_alpaca_client
+
+_anthropic: AsyncAnthropic | None = None
+
+
+def _get_anthropic() -> AsyncAnthropic:
+    global _anthropic
+    if _anthropic is None:
+        _anthropic = AsyncAnthropic(api_key=get_settings().anthropic_api_key)
+    return _anthropic
 
 logger = logging.getLogger(__name__)
 
@@ -30,8 +39,8 @@ class ThresholdAdjustment(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     parameter: str = Field(description="Parameter name, e.g. 'min_conviction_score', 'min_upside_pct', 'stop_loss_pct'")
-    current_value: str = Field(description="Current value as string")
-    suggested_value: str = Field(description="Suggested new value as string")
+    current_value: str | int | float = Field(description="Current value")
+    suggested_value: str | int | float = Field(description="Suggested new value")
     rationale: str = Field(description="Why this change would reduce losses")
 
 
@@ -53,7 +62,7 @@ def _get_account_activities(lookback_days: int = 30) -> list[dict]:
     try:
         from alpaca.trading.requests import GetOrdersRequest
         from alpaca.trading.enums import QueryOrderStatus
-        client = _get_client()
+        client = _get_alpaca_client()
         since = datetime.now(timezone.utc) - timedelta(days=lookback_days)
         req = GetOrdersRequest(
             status=QueryOrderStatus.CLOSED,
@@ -136,9 +145,6 @@ async def analyze_losses(lookback_days: int = 30) -> LossAnalysis:
         },
     }
 
-    from anthropic import Anthropic
-    client_sync = Anthropic(api_key=get_settings().anthropic_api_key)
-
     prompt = f"""You are a quantitative risk manager reviewing a paper trading system that automatically enters \
 positions based on: (1) 13F institutional conviction screening, (2) DCF upside gate ≥10%, \
 (3) Claude multi-timeframe trade signal.
@@ -156,26 +162,23 @@ Your job:
 2. Propose specific threshold adjustments with exact numbers
 3. Assess whether the current market regime is hostile to this strategy
 
-Be specific and data-driven. If there are no losing trades, say so clearly and rate the system as healthy.
+Be specific and data-driven. If there are no losing trades, say so clearly and rate the system as healthy."""
 
-Return a JSON object matching the LossAnalysis schema exactly."""
-
-    def _call_claude() -> LossAnalysis:
-        import anthropic
-        resp = client_sync.messages.create(
-            model="claude-opus-4-7",
-            max_tokens=4096,
-            thinking={"type": "adaptive"},
-            messages=[{"role": "user", "content": prompt}],
-        )
-        # Extract JSON from response
-        text = next((b.text for b in resp.content if hasattr(b, "text")), "")
-        # Find JSON block
-        import re
-        match = re.search(r'\{[\s\S]*\}', text)
-        if not match:
-            raise ValueError("no JSON found in Claude response")
-        return LossAnalysis(**json.loads(match.group()))
-
-    result = await asyncio.to_thread(_call_claude)
-    return result
+    response = await _get_anthropic().messages.parse(
+        model="claude-opus-4-7",
+        max_tokens=4096,
+        thinking={"type": "adaptive"},
+        messages=[{"role": "user", "content": prompt}],
+        output_format=LossAnalysis,
+    )
+    analysis = response.parsed
+    return LossAnalysis(
+        analyzed_at=datetime.now(timezone.utc).isoformat(),
+        total_positions_reviewed=analysis.total_positions_reviewed,
+        losing_positions=analysis.losing_positions,
+        avg_unrealized_pnl_pct=analysis.avg_unrealized_pnl_pct,
+        patterns=analysis.patterns,
+        threshold_adjustments=analysis.threshold_adjustments,
+        overall_assessment=analysis.overall_assessment,
+        market_regime_note=analysis.market_regime_note,
+    )
