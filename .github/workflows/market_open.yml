@@ -1,0 +1,69 @@
+name: Market Open Pipeline
+
+on:
+  schedule:
+    # 9:35 AM ET = 13:35 UTC (accounts for market open + slight buffer)
+    # Mon-Fri only
+    - cron: "35 13 * * 1-5"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Dry run (no orders submitted)"
+        required: false
+        default: "true"
+        type: choice
+        options: ["true", "false"]
+      strategy:
+        description: "Trading strategy"
+        required: false
+        default: "swing"
+        type: choice
+        options: ["swing", "day"]
+
+jobs:
+  pipeline:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          version: "latest"
+
+      - name: Set up Python
+        run: uv python install 3.12
+
+      - name: Install dependencies
+        run: uv sync --frozen
+
+      - name: Run market-open pipeline
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          FRED_API_KEY: ${{ secrets.FRED_API_KEY }}
+          ALPACA_API_KEY: ${{ secrets.ALPACA_API_KEY }}
+          ALPACA_SECRET_KEY: ${{ secrets.ALPACA_SECRET_KEY }}
+          ALPACA_PAPER: "true"
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+          DATABASE_URL: "sqlite+aiosqlite:///./alpha.db"
+          REDIS_URL: ""
+          ENV: "production"
+        run: |
+          DRY_RUN="${{ github.event.inputs.dry_run || 'false' }}"
+          STRATEGY="${{ github.event.inputs.strategy || 'swing' }}"
+          ARGS="--strategy $STRATEGY"
+          if [ "$DRY_RUN" = "true" ]; then
+            ARGS="$ARGS --dry-run"
+          fi
+          uv run python -m backend.pipeline.run $ARGS
+
+      - name: Upload logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pipeline-logs
+          path: "*.log"
+          retention-days: 7

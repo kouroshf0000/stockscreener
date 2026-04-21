@@ -1,0 +1,376 @@
+{
+  "run_id": "003d633f97ab",
+  "started_at": "2026-04-17T18:40:20.597666",
+  "finished_at": "2026-04-17T18:43:46.529945",
+  "candidates_evaluated": 20,
+  "picks": [],
+  "rejected": [
+    {
+      "ticker": "BRK-B",
+      "pick_date": "2026-04-17",
+      "pick_price": "474.5799865722656",
+      "target_price": "1541319.1338",
+      "upside_pct": "3246.754177090004626389445360",
+      "composite_score": "76.500",
+      "scout_scores": [
+        {
+          "scout": "value",
+          "score": "70.0",
+          "evidence": [
+            "P/E 15.3 is 33% below sector median"
+          ]
+        },
+        {
+          "scout": "quality",
+          "score": "75.0",
+          "evidence": [
+            "Debt/Equity 0.18 < 1",
+            "3Y revenue CAGR 20.6% > 10%"
+          ]
+        },
+        {
+          "scout": "momentum",
+          "score": "90.0",
+          "evidence": [
+            "Revenue growing 20.6% 3Y CAGR",
+            "P/E reasonable for growth profile",
+            "Positive FCF yield confirms growth is cash-backed"
+          ]
+        },
+        {
+          "scout": "catalyst",
+          "score": "75.0",
+          "evidence": [
+            "Risk profile benign (total 4/12)",
+            "FCF inflection: +116% YoY"
+          ]
+        }
+      ],
+      "gate_checks": [
+        {
+          "rule": "upside",
+          "result": "pass",
+          "detail": "324675.4% DCF upside"
+        },
+        {
+          "rule": "comps_agreement",
+          "result": "fail",
+          "detail": "no comps available for cross-check"
+        },
+        {
+          "rule": "auditor",
+          "result": "pass",
+          "detail": "data reconciled"
+        },
+        {
+          "rule": "legal_risk",
+          "result": "pass",
+          "detail": "acceptable"
+        },
+        {
+          "rule": "liquidity",
+          "result": "pass",
+          "detail": "market_cap=1023607767040"
+        }
+      ],
+      "gate_passed": false,
+      "thesis_bullets": [
+        "Momentum: Revenue growing 20.6% 3Y CAGR",
+        "Quality: Debt/Equity 0.18 < 1",
+        "DCF implies 324675% upside vs current price."
+      ],
+      "deliverables": {}
+    },
+    {
+      "ticker": "META",
+      "pick_date": "2026-04-17",
+      "pick_price": "688.5499877929688",
+      "target_price": "9.8575",
+      "upside_pct": "-0.9856837532740676654633298984",
+      "composite_score": "74.500",
+      "scout_scores": [
+        {
+          "scout": "value",
+          "score": "50.0",
+          "evidence": []
+        },
+        {
+          "scout": "quality",
+          "score": "95.0",
+          "evidence": [
+            "ROIC 19.5% > 15%",
+            "Debt/Equity 0.39 < 1",
+            "3Y revenue CAGR 19.9% > 10%"
+          ]
+        },
+        {
+          "scout": "momentum",
+          "score": "90.0",
+          "evidence": [
+            "Revenue growing 19.9% 3Y CAGR",
+            "P/E reasonable for growth profile",
+            "Positive FCF yield confirms growth is cash-backed"
+          ]
+        },
+        {
+          "scout": "catalyst",
+          "score": "65.0",
+          "evidence": [
+            "Risk profile benign (total 4/12)"
+          ]
+        }
+      ],
+      "gate_checks": [
+        {
+          "rule": "upside",
+          "result": "fail",
+          "detail": "-98.6% < 20%"
+        },
+        {
+          "rule": "comps_agreement",
+          "result": "fail",
+          "detail": "DCF diverges 7399.1% from best comp"
+        },
+        {
+          "rule": "auditor",
+          "result": "pass",
+          "detail": "data reconciled"
+        },
+        {
+          "rule": "legal_risk",
+          "result": "pass",
+          "detail": "acceptable"
+        },
+        {
+          "rule": "liquidity",
+          "result": "pass",
+          "detail": "market_cap=1741725368320"
+        }
+      ],
+      "gate_passed": false,
+      "thesis_bullets": [
+        "Quality: ROIC 19.5% > 15%",
+        "Momentum: Revenue growing 19.9% 3Y CAGR"
+      ],
+      "deliverables": {}
+    },
+    {
+      "ticker": "MSFT",
+      "pick_date": "2026-04-17",
+      "pick_price": "422.7900085449219",
+      "target_price": "105.6852",
+      "upside_pct": "-0.7500291920406871398211051110",
+      "composite_score": "70.500",
+      "scout_scores": [
+        {
+          "scout": "value",
+          "score": "50.0",
+          "evidence": []
+        },
+        {
+          "scout": "quality",
+          "score": "95.0",
+          "evidence": [
+            "ROIC 26.2% > 15%",
+            "Debt/Equity 0.18 < 1",
+            "3Y revenue CAGR 12.4% > 10%"
+          ]
+        },
+        {
+          "scout": "momentum",
+          "score": "70.0",
+          "evidence": [
+            "P/E reasonable for growth profile",
+            "Positive FCF yield confirms growth is cash-backed"
+          ]
+        },
+        {
+          "scout": "catalyst",
+          "score": "65.0",
+          "evidence": [
+            "Risk profile benign (total 4/12)"
+          ]
+        }
+      ],
+      "gate_checks": [
+        {
+          "rule": "upside",
+          "result": "fail",
+          "detail": "-75.0% < 20%"
+        },
+        {
+          "rule": "comps_agreement",
+          "result": "fail",
+          "detail": "DCF diverges 349.7% from best comp"
+        },
+        {
+          "rule": "auditor",
+          "result": "pass",
+          "detail": "data reconciled"
+        },
+        {
+          "rule": "legal_risk",
+          "result": "pass",
+          "detail": "acceptable"
+        },
+        {
+          "rule": "liquidity",
+          "result": "pass",
+          "detail": "market_cap=3142335070208"
+        }
+      ],
+      "gate_passed": false,
+      "thesis_bullets": [
+        "Quality: ROIC 26.2% > 15%",
+        "Momentum: P/E reasonable for growth profile"
+      ],
+      "deliverables": {}
+    },
+    {
+      "ticker": "UNH",
+      "pick_date": "2026-04-17",
+      "pick_price": "324.6300048828125",
+      "target_price": "1796.0841",
+      "upside_pct": "4.532711437847339035180068048",
+      "composite_score": "69.000",
+      "scout_scores": [
+        {
+          "scout": "value",
+          "score": "65.0",
+          "evidence": [
+            "FCF yield 5.5% > 5%"
+          ]
+        },
+        {
+          "scout": "quality",
+          "score": "75.0",
+          "evidence": [
+            "Debt/Equity 0.83 < 1",
+            "3Y revenue CAGR 11.4% > 10%"
+          ]
+        },
+        {
+          "scout": "momentum",
+          "score": "70.0",
+          "evidence": [
+            "P/E reasonable for growth profile",
+            "Positive FCF yield confirms growth is cash-backed"
+          ]
+        },
+        {
+          "scout": "catalyst",
+          "score": "65.0",
+          "evidence": [
+            "Risk profile benign (total 4/12)"
+          ]
+        }
+      ],
+      "gate_checks": [
+        {
+          "rule": "upside",
+          "result": "pass",
+          "detail": "453.3% DCF upside"
+        },
+        {
+          "rule": "comps_agreement",
+          "result": "fail",
+          "detail": "DCF diverges 75.0% from best comp"
+        },
+        {
+          "rule": "auditor",
+          "result": "pass",
+          "detail": "data reconciled"
+        },
+        {
+          "rule": "legal_risk",
+          "result": "pass",
+          "detail": "acceptable"
+        },
+        {
+          "rule": "liquidity",
+          "result": "pass",
+          "detail": "market_cap=294658801664"
+        }
+      ],
+      "gate_passed": false,
+      "thesis_bullets": [
+        "Quality: Debt/Equity 0.83 < 1",
+        "Momentum: P/E reasonable for growth profile",
+        "DCF implies 453% upside vs current price."
+      ],
+      "deliverables": {}
+    },
+    {
+      "ticker": "NVDA",
+      "pick_date": "2026-04-17",
+      "pick_price": "201.67999267578125",
+      "target_price": "112.7141",
+      "upside_pct": "-0.4411238490463267498885815785",
+      "composite_score": "68.500",
+      "scout_scores": [
+        {
+          "scout": "value",
+          "score": "50.0",
+          "evidence": []
+        },
+        {
+          "scout": "quality",
+          "score": "95.0",
+          "evidence": [
+            "ROIC 65.7% > 15%",
+            "Debt/Equity 0.07 < 1",
+            "3Y revenue CAGR 100.0% > 10%"
+          ]
+        },
+        {
+          "scout": "momentum",
+          "score": "80.0",
+          "evidence": [
+            "Revenue growing 100.0% 3Y CAGR",
+            "Positive FCF yield confirms growth is cash-backed"
+          ]
+        },
+        {
+          "scout": "catalyst",
+          "score": "45.0",
+          "evidence": [
+            "FCF inflection: +59% YoY"
+          ]
+        }
+      ],
+      "gate_checks": [
+        {
+          "rule": "upside",
+          "result": "fail",
+          "detail": "-44.1% < 20%"
+        },
+        {
+          "rule": "comps_agreement",
+          "result": "fail",
+          "detail": "DCF diverges 56.6% from best comp"
+        },
+        {
+          "rule": "auditor",
+          "result": "pass",
+          "detail": "data reconciled"
+        },
+        {
+          "rule": "legal_risk",
+          "result": "pass",
+          "detail": "acceptable"
+        },
+        {
+          "rule": "liquidity",
+          "result": "pass",
+          "detail": "market_cap=4901832228864"
+        }
+      ],
+      "gate_passed": false,
+      "thesis_bullets": [
+        "Quality: ROIC 65.7% > 15%",
+        "Momentum: Revenue growing 100.0% 3Y CAGR"
+      ],
+      "deliverables": {}
+    }
+  ]
+}

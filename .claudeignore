@@ -1,0 +1,29 @@
+# Generated / installed — never read by Claude
+.venv/
+frontend/node_modules/
+frontend/.next/
+frontend/tsconfig.tsbuildinfo
+frontend/package-lock.json
+
+# Python caches
+**/__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Lock files (too large, not useful for code understanding)
+uv.lock
+
+# Build outputs
+dist/
+build/
+exports/
+
+# Misc
+.DS_Store
+*.log
+hunter_ledger/marks.jsonl
