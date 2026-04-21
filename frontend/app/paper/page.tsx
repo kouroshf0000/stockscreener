@@ -101,6 +101,7 @@ export default function PaperTradingPage() {
   const [topN, setTopN] = useState(10);
   const [dryRun, setDryRun] = useState(true);
   const [loading, setLoading] = useState(false);
+  const [loadingMsg, setLoadingMsg] = useState("Running pipeline...");
   const [signals, setSignals] = useState<SignalBatch | null>(null);
   const [orders, setOrders] = useState<OrderResult[]>([]);
   const [positions, setPositions] = useState<Position[]>([]);
@@ -123,16 +124,31 @@ export default function PaperTradingPage() {
 
   async function runPipeline() {
     setLoading(true);
+    setLoadingMsg("Starting pipeline...");
     setSignals(null);
     setOrders([]);
     try {
       const url = `${apiBase}/api/v1/trade/paper/run?strategy=${strategy}&top_n=${topN}&dry_run=${dryRun}`;
       const r = await fetch(url, { method: "POST" });
       if (!r.ok) throw new Error(await r.text());
-      const data = await r.json();
-      setSignals(data.signals);
-      setOrders(data.orders);
-      if (!dryRun) fetchPositions();
+      const { job_id } = await r.json();
+
+      // Poll until done
+      const steps = ["Downloading 13F filings...", "Screening conviction...", "Running DCF gate...", "Generating Claude signals...", "Submitting orders..."];
+      let step = 0;
+      while (true) {
+        await new Promise(res => setTimeout(res, 4000));
+        setLoadingMsg(steps[Math.min(step++, steps.length - 1)]);
+        const poll = await fetch(`${apiBase}/api/v1/trade/paper/run/${job_id}`);
+        const job = await poll.json();
+        if (job.status === "done") {
+          setSignals({ strategy, quarter: "", candidates: job.candidates ?? [], actionable_count: 0, skipped_count: 0 });
+          setOrders(job.orders ?? []);
+          if (!dryRun) fetchPositions();
+          break;
+        }
+        if (job.status === "error") throw new Error(job.error ?? "pipeline failed");
+      }
     } catch (e) {
       alert(String(e));
     } finally {
@@ -224,7 +240,7 @@ export default function PaperTradingPage() {
             disabled={loading}
             className="px-5 py-2 bg-white text-zinc-900 font-medium rounded-lg text-sm hover:bg-zinc-200 disabled:opacity-50 disabled:cursor-wait"
           >
-            {loading ? "Running pipeline…" : "Run Pipeline"}
+            {loading ? loadingMsg : "Run Pipeline"}
           </button>
         </div>
       </div>
