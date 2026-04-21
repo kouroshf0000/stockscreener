@@ -511,12 +511,13 @@ async def fetch_hedge_fund_digests(
         str(top_positions),
     )
     redis = get_redis()
-    try:
-        cached = await redis.get(redis_key)
-        if cached:
-            return ThirteenFHedgeFundDigestResponse.model_validate_json(cached)
-    except Exception:
-        pass
+    if redis is not None:
+        try:
+            cached = await redis.get(redis_key)
+            if cached:
+                return ThirteenFHedgeFundDigestResponse.model_validate_json(cached)
+        except Exception:
+            pass
 
     latest_zip = await _fetch_zip_bytes(latest.url)
     latest_candidates = _combine_candidates(latest_zip)
@@ -570,12 +571,13 @@ async def fetch_hedge_fund_digests(
         unmatched_managers=unmatched,
         managers=digests,
     )
-    with suppress(Exception):
-        await redis.set(
-            redis_key,
-            response.model_dump_json(),
-            ex=get_settings().cache_ttl_fundamentals_s,
-        )
+    if redis is not None:
+        with suppress(Exception):
+            await redis.set(
+                redis_key,
+                response.model_dump_json(),
+                ex=get_settings().cache_ttl_fundamentals_s,
+            )
     return response
 
 
