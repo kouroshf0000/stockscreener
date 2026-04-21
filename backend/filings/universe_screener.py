@@ -10,10 +10,12 @@ Pipeline:
 from __future__ import annotations
 
 import asyncio
+import io
 import logging
 from decimal import Decimal
 
 import pandas as pd
+import requests
 
 from backend.filings.conviction_screener import (
     ConvictionScreenRow,
@@ -26,13 +28,24 @@ logger = logging.getLogger(__name__)
 
 _RSI_OVERSOLD = Decimal("40")
 _PASS_TV = {"BUY", "STRONG_BUY"}
+_WIKI_HEADERS = {
+    "User-Agent": (
+        "Mozilla/5.0 (compatible; stock-screener/1.0; "
+        "+https://github.com/kouroshf0000/stockscreener)"
+    )
+}
+
+
+def _wiki_html(url: str) -> str:
+    resp = requests.get(url, headers=_WIKI_HEADERS, timeout=15)
+    resp.raise_for_status()
+    return resp.text
 
 
 def _fetch_sp500() -> list[str]:
     try:
-        df = pd.read_html(
-            "https://en.wikipedia.org/wiki/List_of_S%26P_500_companies", header=0
-        )[0]
+        html = _wiki_html("https://en.wikipedia.org/wiki/List_of_S%26P_500_companies")
+        df = pd.read_html(io.StringIO(html), header=0)[0]
         return df["Symbol"].str.replace(".", "-", regex=False).dropna().tolist()
     except Exception as e:
         logger.warning("SP500 wiki fetch failed: %s", e)
@@ -41,7 +54,8 @@ def _fetch_sp500() -> list[str]:
 
 def _fetch_ndx() -> list[str]:
     try:
-        tables = pd.read_html("https://en.wikipedia.org/wiki/Nasdaq-100", header=0)
+        html = _wiki_html("https://en.wikipedia.org/wiki/Nasdaq-100")
+        tables = pd.read_html(io.StringIO(html), header=0)
         for df in tables:
             for col in ("Ticker", "Symbol"):
                 if col in df.columns:

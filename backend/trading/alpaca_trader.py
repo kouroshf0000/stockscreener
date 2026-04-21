@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import math
 from decimal import Decimal
 from typing import Literal
 
@@ -134,8 +135,8 @@ async def submit_bracket_order(
             )
             return _submit_plain_market(ticker, side, notional_usd)
 
-        # 3. Compute quantity and bracket prices
-        qty = round(float(notional_usd) / price, 2)
+        # 3. Compute quantity and bracket prices — must be whole shares for bracket orders
+        qty = max(1, math.floor(float(notional_usd) / price))
 
         if side == "buy":
             stop_price = round(price * (1 - stop_loss_pct / 100), 2)
