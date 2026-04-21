@@ -47,7 +47,7 @@ async def run_paper_trades(
     """Start the pipeline as a background job. Poll /run/{job_id} for results."""
     job_id = str(uuid.uuid4())[:8]
     started = datetime.now(timezone.utc).isoformat()
-    _jobs[job_id] = {"status": "running", "started_at": started}
+    _jobs[job_id] = {"job_id": job_id, "status": "running", "started_at": started}
 
     background_tasks.add_task(
         _run_pipeline, job_id, strategy, top_n, exchange, screener, dry_run

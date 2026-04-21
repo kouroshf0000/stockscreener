@@ -43,6 +43,16 @@ app.add_middleware(
 @app.exception_handler(RateLimitExceeded)
 async def _rate_limited(_request: Request, exc: RateLimitExceeded) -> JSONResponse:
     return JSONResponse(status_code=429, content={"detail": f"rate limit: {exc.detail}"})
+
+
+@app.exception_handler(Exception)
+async def _unhandled(_request: Request, exc: Exception) -> JSONResponse:
+    origin = _request.headers.get("origin", "")
+    headers = {}
+    if origin:
+        headers["access-control-allow-origin"] = origin
+        headers["access-control-allow-credentials"] = "true"
+    return JSONResponse(status_code=500, content={"detail": str(exc)}, headers=headers)
 app.include_router(backtest_router)
 app.include_router(fundamentals_router)
 app.include_router(screen_router)
