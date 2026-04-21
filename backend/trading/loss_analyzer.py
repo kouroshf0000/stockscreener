@@ -38,7 +38,7 @@ class ThresholdAdjustment(BaseModel):
 class LossAnalysis(BaseModel):
     model_config = ConfigDict(frozen=True)
 
-    analyzed_at: str
+    analyzed_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
     total_positions_reviewed: int
     losing_positions: int
     avg_unrealized_pnl_pct: float
@@ -100,7 +100,7 @@ async def analyze_losses(lookback_days: int = 30) -> LossAnalysis:
     then suggest concrete parameter adjustments to reduce future losses.
     """
     # Gather data concurrently
-    positions_task = asyncio.create_task(asyncio.to_thread(lambda: get_open_positions()))
+    positions_task = asyncio.create_task(get_open_positions())
     activities_task = asyncio.create_task(asyncio.to_thread(_get_account_activities, lookback_days))
     trades_task = asyncio.create_task(asyncio.to_thread(_get_recent_trades_from_supabase, lookback_days))
 

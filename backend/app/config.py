@@ -21,6 +21,7 @@ class Settings(BaseSettings):
     database_url: str = "postgresql+asyncpg://alpha:alpha@localhost:5432/alpha"
     redis_url: str = "redis://localhost:6379/0"
 
+    cors_origins: str = ""  # comma-separated extra allowed origins
     env: str = "dev"
     log_level: str = "INFO"
 
