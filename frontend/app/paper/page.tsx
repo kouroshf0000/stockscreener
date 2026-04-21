@@ -12,10 +12,38 @@ interface TradeSignal {
   entry_price_note: string;
   stop_loss_note: string;
   target_note: string;
+  stop_loss_pct: number;
+  target_pct: number;
   risk_reward_estimate: number;
   timeframe_alignment: string;
   key_risks: string[];
   reasoning: string;
+}
+
+interface TradePattern {
+  pattern: string;
+  frequency: number;
+  avg_loss_pct: number;
+  description: string;
+  fix: string;
+}
+
+interface ThresholdAdjustment {
+  parameter: string;
+  current_value: string;
+  suggested_value: string;
+  rationale: string;
+}
+
+interface LossAnalysis {
+  analyzed_at: string;
+  total_positions_reviewed: number;
+  losing_positions: number;
+  avg_unrealized_pnl_pct: number;
+  patterns: TradePattern[];
+  threshold_adjustments: ThresholdAdjustment[];
+  overall_assessment: string;
+  market_regime_note: string;
 }
 
 interface Candidate {
@@ -77,6 +105,8 @@ export default function PaperTradingPage() {
   const [positions, setPositions] = useState<Position[]>([]);
   const [posLoading, setPosLoading] = useState(false);
   const [expanded, setExpanded] = useState<string | null>(null);
+  const [analysis, setAnalysis] = useState<LossAnalysis | null>(null);
+  const [analyzing, setAnalyzing] = useState(false);
 
   const fetchPositions = useCallback(async () => {
     setPosLoading(true);
@@ -106,6 +136,20 @@ export default function PaperTradingPage() {
       alert(String(e));
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function runAnalysis() {
+    setAnalyzing(true);
+    setAnalysis(null);
+    try {
+      const r = await fetch("/api/v1/trade/paper/analyze", { method: "POST" });
+      if (!r.ok) throw new Error(await r.text());
+      setAnalysis(await r.json());
+    } catch (e) {
+      alert(String(e));
+    } finally {
+      setAnalyzing(false);
     }
   }
 
@@ -166,13 +210,22 @@ export default function PaperTradingPage() {
             </button>
           </div>
         </div>
-        <button
-          onClick={runPipeline}
-          disabled={loading}
-          className="ml-auto px-5 py-2 bg-white text-zinc-900 font-medium rounded-lg text-sm hover:bg-zinc-200 disabled:opacity-50 disabled:cursor-wait"
-        >
-          {loading ? "Running pipeline…" : "Run Pipeline"}
-        </button>
+        <div className="ml-auto flex gap-2">
+          <button
+            onClick={runAnalysis}
+            disabled={analyzing}
+            className="px-4 py-2 bg-zinc-800 border border-zinc-600 text-zinc-300 font-medium rounded-lg text-sm hover:bg-zinc-700 disabled:opacity-50 disabled:cursor-wait"
+          >
+            {analyzing ? "Analyzing…" : "Analyze Losses"}
+          </button>
+          <button
+            onClick={runPipeline}
+            disabled={loading}
+            className="px-5 py-2 bg-white text-zinc-900 font-medium rounded-lg text-sm hover:bg-zinc-200 disabled:opacity-50 disabled:cursor-wait"
+          >
+            {loading ? "Running pipeline…" : "Run Pipeline"}
+          </button>
+        </div>
       </div>
 
       {/* Open Positions */}
@@ -304,10 +357,16 @@ export default function PaperTradingPage() {
                         <div className="bg-zinc-800/50 rounded-lg p-3">
                           <p className="text-xs text-zinc-500 mb-1">Stop Loss</p>
                           <p className="text-zinc-200">{c.signal.stop_loss_note}</p>
+                          {c.signal.stop_loss_pct > 0 && (
+                            <p className="text-xs text-red-400 mt-1">−{c.signal.stop_loss_pct.toFixed(1)}% from entry</p>
+                          )}
                         </div>
                         <div className="bg-zinc-800/50 rounded-lg p-3">
                           <p className="text-xs text-zinc-500 mb-1">Target</p>
                           <p className="text-zinc-200">{c.signal.target_note}</p>
+                          {c.signal.target_pct > 0 && (
+                            <p className="text-xs text-emerald-400 mt-1">+{c.signal.target_pct.toFixed(1)}% from entry</p>
+                          )}
                         </div>
                       </div>
                       <div>
@@ -337,6 +396,77 @@ export default function PaperTradingPage() {
               );
             })}
           </div>
+        </section>
+      )}
+      {/* Loss Analysis */}
+      {analysis && (
+        <section className="mt-10">
+          <div className="flex items-center gap-3 mb-4">
+            <h2 className="text-sm font-semibold text-zinc-400 uppercase tracking-wider">Self-Healing Analysis</h2>
+            <span className={`text-xs px-2 py-0.5 rounded-full border ${analysis.losing_positions > 0 ? "bg-red-900/30 text-red-400 border-red-800" : "bg-emerald-900/30 text-emerald-400 border-emerald-800"}`}>
+              {analysis.losing_positions} losing / {analysis.total_positions_reviewed} positions
+            </span>
+          </div>
+
+          {/* Overall assessment */}
+          <div className="bg-zinc-900 border border-zinc-700 rounded-xl p-5 mb-4">
+            <p className="text-xs text-zinc-500 mb-2 uppercase tracking-wider">Assessment</p>
+            <p className="text-zinc-200 leading-relaxed">{analysis.overall_assessment}</p>
+            {analysis.market_regime_note && (
+              <p className="text-xs text-yellow-400 mt-3 border-t border-zinc-800 pt-3">{analysis.market_regime_note}</p>
+            )}
+          </div>
+
+          {/* Patterns */}
+          {analysis.patterns.length > 0 && (
+            <div className="mb-4">
+              <p className="text-xs text-zinc-500 uppercase tracking-wider mb-3">Loss Patterns Identified</p>
+              <div className="space-y-2">
+                {analysis.patterns.map((p, i) => (
+                  <div key={i} className="bg-zinc-900 border border-red-900/40 rounded-xl p-4">
+                    <div className="flex items-start justify-between gap-4 mb-2">
+                      <span className="font-medium text-zinc-200">{p.pattern}</span>
+                      <div className="flex gap-3 shrink-0 text-xs">
+                        <span className="text-red-400">{p.frequency}× trades</span>
+                        <span className="text-red-400">avg −{Math.abs(p.avg_loss_pct).toFixed(1)}%</span>
+                      </div>
+                    </div>
+                    <p className="text-xs text-zinc-400 mb-2">{p.description}</p>
+                    <p className="text-xs text-emerald-400 border-t border-zinc-800 pt-2"><span className="text-zinc-500">Fix: </span>{p.fix}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Suggested threshold changes */}
+          {analysis.threshold_adjustments.length > 0 && (
+            <div>
+              <p className="text-xs text-zinc-500 uppercase tracking-wider mb-3">Suggested Adjustments</p>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="text-zinc-500 text-xs border-b border-zinc-800">
+                      <th className="text-left py-2">Parameter</th>
+                      <th className="text-right py-2">Current</th>
+                      <th className="text-right py-2">Suggested</th>
+                      <th className="text-left py-2 pl-4">Rationale</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {analysis.threshold_adjustments.map((a, i) => (
+                      <tr key={i} className="border-b border-zinc-800/50">
+                        <td className="py-3 font-mono text-zinc-300">{a.parameter}</td>
+                        <td className="text-right text-zinc-500">{a.current_value}</td>
+                        <td className="text-right text-yellow-400 font-medium">{a.suggested_value}</td>
+                        <td className="pl-4 text-zinc-400 text-xs">{a.rationale}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
         </section>
       )}
     </main>

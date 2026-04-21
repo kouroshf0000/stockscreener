@@ -89,6 +89,8 @@ class ReasonedTradeSignal(BaseModel):
     stop_loss_note: str = Field(description="where to cut the position and why")
     target_note: str = Field(description="price target and basis")
     risk_reward_estimate: float = Field(description="estimated R:R ratio, 0 if no_trade")
+    stop_loss_pct: float = Field(default=0.0, description="stop loss distance as % from entry (positive number, e.g. 3.0 means 3% below entry for longs). Set 0.0 for no_trade.")
+    target_pct: float = Field(default=0.0, description="take profit distance as % from entry (positive number, e.g. 6.0 means 6% above entry for longs). Set 0.0 for no_trade.")
     timeframe_alignment: str = Field(description="whether 1D/4H/1H signals agree or conflict")
     key_risks: list[str]
     confidence: Literal["low", "medium", "high"]
@@ -228,6 +230,10 @@ output direction=no_trade unless the conflict has a clear resolution.
 <technical_data>
 {context}
 </technical_data>
+
+Set stop_loss_pct and target_pct as concrete percentage distances from entry price (positive numbers). \
+For a long with 3% stop and 6% target: stop_loss_pct=3.0, target_pct=6.0. \
+For no_trade set both to 0.0.
 
 Return a JSON object matching the ReasonedTradeSignal schema exactly."""
 

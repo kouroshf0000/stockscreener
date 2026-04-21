@@ -6,7 +6,7 @@ from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, ConfigDict
 
 from backend.app.supabase_client import get_supabase
-from backend.trading.alpaca_trader import OrderResult, close_position, get_open_positions, submit_notional_order
+from backend.trading.alpaca_trader import OrderResult, close_position, get_open_positions, submit_bracket_order
 from backend.trading.signal_generator import SignalBatch, TradeCandidate, generate_signals
 
 router = APIRouter(prefix="/api/v1/trade/paper", tags=["paper-trading"])
@@ -52,10 +52,12 @@ async def run_paper_trades(
             if candidate.ticker is None:
                 continue
             side = "buy" if candidate.side == "long" else "sell"
-            result = await submit_notional_order(
+            result = await submit_bracket_order(
                 ticker=candidate.ticker,
                 side=side,
                 notional_usd=candidate.notional_usd,
+                stop_loss_pct=candidate.signal.stop_loss_pct if candidate.signal.stop_loss_pct > 0 else 3.0,
+                target_pct=candidate.signal.target_pct if candidate.signal.target_pct > 0 else 6.0,
             )
             orders.append(result)
             _persist_trade(result, candidate, strategy)
@@ -77,6 +79,10 @@ def _persist_trade(order: OrderResult, candidate: TradeCandidate, strategy: str)
             "signal_direction": candidate.signal.direction,
             "signal_confidence": candidate.signal.confidence,
             "entry_rationale": candidate.signal.entry_rationale,
+            "stop_loss_pct": float(candidate.signal.stop_loss_pct) if hasattr(candidate.signal, 'stop_loss_pct') else None,
+            "target_pct": float(candidate.signal.target_pct) if hasattr(candidate.signal, 'target_pct') else None,
+            "stop_price": result.stop_price,
+            "target_price": result.target_price,
         }).execute()
     except Exception:
         pass  # ledger write failure never blocks order flow
@@ -98,3 +104,14 @@ async def close_paper_position(ticker: str) -> OrderResult:
         return await close_position(ticker)
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"close position failed: {e}") from e
+
+
+@router.post("/analyze", response_model=dict)
+async def analyze_paper_losses() -> dict:
+    """Ask Claude to analyze losing positions and suggest parameter adjustments."""
+    try:
+        from backend.trading.loss_analyzer import analyze_losses
+        analysis = await analyze_losses(lookback_days=30)
+        return analysis.model_dump()
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"analysis failed: {e}") from e
