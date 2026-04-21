@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { fetchJSON, fmtMoney, fmtNum } from "@/lib/api";
+import { fetchJSON, fmtMoney, fmtNum, apiBase } from "@/lib/api";
 
 type Filter = { metric: string; op: string; value: number; vs_sector?: boolean };
 type Row = {

@@ -4,7 +4,7 @@ import { useState } from "react";
 import useSWR from "swr";
 import Link from "next/link";
 import { Badge, Card, KV, Shell } from "@/components/Shell";
-import { fetchJSON, fmtMoney, fmtPct } from "@/lib/api";
+import { fetchJSON, fmtMoney, fmtPct, apiBase } from "@/lib/api";
 
 type GateCheck = { rule: string; result: "pass" | "fail"; detail: string };
 type Pick = {

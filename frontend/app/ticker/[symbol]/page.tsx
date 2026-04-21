@@ -4,7 +4,7 @@ import Link from "next/link";
 import { use, useState } from "react";
 import useSWR from "swr";
 import { Badge, KV, Shell } from "@/components/Shell";
-import { fetchJSON, fmtMoney, fmtNum, fmtPct } from "@/lib/api";
+import { fetchJSON, fmtMoney, fmtNum, fmtPct, apiBase } from "@/lib/api";
 
 /* ─── Types ──────────────────────────────────────────────────── */
 type Fundamentals = { ticker: string; name: string | null; sector: string | null; industry: string | null };
