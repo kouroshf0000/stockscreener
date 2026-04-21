@@ -491,6 +491,40 @@ def _build_digest(
     )
 
 
+async def _supabase_cache_get(latest_label: str) -> ThirteenFHedgeFundDigestResponse | None:
+    """Return cached digest from Supabase, or None on miss/error."""
+    try:
+        from backend.app.supabase_client import get_supabase
+        resp = await asyncio.to_thread(
+            lambda: get_supabase()
+            .table("thirteenf_digest_cache")
+            .select("payload")
+            .eq("latest_label", latest_label)
+            .limit(1)
+            .execute()
+        )
+        if resp.data:
+            return ThirteenFHedgeFundDigestResponse.model_validate(resp.data[0]["payload"])
+    except Exception:
+        pass
+    return None
+
+
+async def _supabase_cache_set(latest_label: str, response: ThirteenFHedgeFundDigestResponse) -> None:
+    """Upsert digest into Supabase cache. Fire-and-forget."""
+    try:
+        import json
+        from backend.app.supabase_client import get_supabase
+        await asyncio.to_thread(
+            lambda: get_supabase()
+            .table("thirteenf_digest_cache")
+            .upsert({"latest_label": latest_label, "payload": json.loads(response.model_dump_json())})
+            .execute()
+        )
+    except Exception:
+        pass
+
+
 async def fetch_hedge_fund_digests(
     limit: int = 25,
     top_positions: int = 10,
@@ -502,6 +536,12 @@ async def fetch_hedge_fund_digests(
 
     latest = dataset_links[0]
     previous = dataset_links[1] if len(dataset_links) > 1 else None
+
+    # Supabase cache: avoids downloading 18MB of ZIPs on every pipeline run
+    cached = await _supabase_cache_get(latest.label)
+    if cached is not None:
+        return cached
+
     redis_key = key(
         "edgar",
         "13f",
@@ -513,9 +553,9 @@ async def fetch_hedge_fund_digests(
     redis = get_redis()
     if redis is not None:
         try:
-            cached = await redis.get(redis_key)
-            if cached:
-                return ThirteenFHedgeFundDigestResponse.model_validate_json(cached)
+            cached_redis = await redis.get(redis_key)
+            if cached_redis:
+                return ThirteenFHedgeFundDigestResponse.model_validate_json(cached_redis)
         except Exception:
             pass
 
@@ -578,6 +618,8 @@ async def fetch_hedge_fund_digests(
                 response.model_dump_json(),
                 ex=get_settings().cache_ttl_fundamentals_s,
             )
+    # Persist to Supabase so future pipeline runs skip the ZIP download entirely
+    await _supabase_cache_set(latest.label, response)
     return response
 
 

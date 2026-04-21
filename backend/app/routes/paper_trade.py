@@ -1,9 +1,12 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import uuid
 from datetime import datetime, timezone
 from typing import Literal
+
+logger = logging.getLogger(__name__)
 
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Query
 from pydantic import BaseModel, ConfigDict
@@ -154,6 +157,24 @@ async def close_paper_position(ticker: str) -> OrderResult:
         return await close_position(ticker)
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"close position failed: {e}") from e
+
+
+@router.post("/refresh-13f", response_model=dict)
+async def refresh_13f_cache(background_tasks: BackgroundTasks) -> dict:
+    """Clear the Supabase 13F cache and re-download from SEC in the background."""
+    async def _refresh() -> None:
+        try:
+            from backend.app.supabase_client import get_supabase
+            await asyncio.to_thread(
+                lambda: get_supabase().table("thirteenf_digest_cache").delete().neq("id", 0).execute()
+            )
+            from backend.filings.thirteenf import fetch_hedge_fund_digests
+            await fetch_hedge_fund_digests()
+        except Exception as e:
+            logger.warning("13F cache refresh failed: %s", e)
+
+    background_tasks.add_task(_refresh)
+    return {"status": "refresh started"}
 
 
 @router.post("/analyze", response_model=dict)
