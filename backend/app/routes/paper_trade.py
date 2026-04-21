@@ -81,8 +81,8 @@ def _persist_trade(order: OrderResult, candidate: TradeCandidate, strategy: str)
             "entry_rationale": candidate.signal.entry_rationale,
             "stop_loss_pct": float(candidate.signal.stop_loss_pct) if hasattr(candidate.signal, 'stop_loss_pct') else None,
             "target_pct": float(candidate.signal.target_pct) if hasattr(candidate.signal, 'target_pct') else None,
-            "stop_price": result.stop_price,
-            "target_price": result.target_price,
+            "stop_price": order.stop_price,
+            "target_price": order.target_price,
         }).execute()
     except Exception:
         pass  # ledger write failure never blocks order flow

@@ -22,6 +22,6 @@ services:
       - key: DATABASE_URL
         value: "sqlite+aiosqlite:///./alpha.db"
       - key: REDIS_URL
-        value: "redis://localhost:6379/0"
+        value: ""
       - key: ENV
         value: "production"
