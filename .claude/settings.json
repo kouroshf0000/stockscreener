@@ -70,7 +70,18 @@
       "mcp__supabase__list_tables",
       "mcp__supabase__get_project_url",
       "mcp__supabase__apply_migration",
-      "mcp__supabase__get_publishable_keys"
+      "mcp__supabase__get_publishable_keys",
+      "Bash(git remote *)",
+      "Bash(git push *)",
+      "Bash(gh auth *)",
+      "Bash(gh secret *)",
+      "Bash(gh workflow *)",
+      "Bash(gh run *)",
+      "Bash(git add *)",
+      "Bash(git commit *)",
+      "Bash(npm list *)",
+      "Bash(vercel --yes --prod)",
+      "Bash(vercel env *)"
     ],
     "additionalDirectories": [
       "/Users/kouroshfarboodmanesh/Stock Screeener/frontend/app/ticker",

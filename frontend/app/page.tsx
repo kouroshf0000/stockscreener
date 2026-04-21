@@ -26,6 +26,18 @@ const modules = [
     ),
   },
   {
+    href: "/paper",
+    tag: "Systematic Execution",
+    title: "Paper Trading",
+    description:
+      "13F conviction screener meets DCF upside gate and Claude multi-timeframe signal. Run the full pipeline, review signals, and submit paper orders to Alpaca — all in one view.",
+    icon: (
+      <svg className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 18L9 11.25l4.306 4.307a11.95 11.95 0 015.814-5.519l2.74-1.22m0 0l-5.94-2.28m5.94 2.28l-2.28 5.941" />
+      </svg>
+    ),
+  },
+  {
     href: "/ticker/NVDA",
     tag: "Single-Name Analysis",
     title: "Research Note",
