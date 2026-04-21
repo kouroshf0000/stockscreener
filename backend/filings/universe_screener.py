@@ -75,7 +75,7 @@ async def _tech_screen_one(ticker: str, sem: asyncio.Semaphore) -> TechnicalSnap
 
 
 async def run_universe_screen(
-    min_upside_pct: Decimal = Decimal("7"),
+    min_upside_pct: Decimal = Decimal("0.07"),  # stored as fraction: 0.07 = 7%
     max_dcf: int = 30,
 ) -> list[ConvictionScreenRow]:
     """

@@ -44,11 +44,11 @@ async def run(
             continue
 
         logger.info(
-            "signal %s | %s | conf=%s | RR=%.1f | upside=%s%%",
+            "signal %s | %s | conf=%s | RR=%.1f | upside=%.1f%%",
             candidate.ticker, candidate.side,
             candidate.signal.confidence,
             candidate.signal.risk_reward_estimate,
-            candidate.upside_pct,
+            float(candidate.upside_pct or 0) * 100,
         )
 
         if dry_run:

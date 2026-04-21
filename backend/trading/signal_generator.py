@@ -14,8 +14,8 @@ from backend.technicals.tv_enrichment import fetch_tv_multiframe
 
 logger = logging.getLogger(__name__)
 
-_MIN_UPSIDE_PCT_13F = Decimal("10")       # DCF upside gate for 13F conviction candidates
-_MIN_UPSIDE_PCT_UNIVERSE = Decimal("7")   # DCF upside gate for technical universe candidates
+_MIN_UPSIDE_PCT_13F = Decimal("0.10")      # DCF upside gate for 13F candidates (stored as fraction: 0.10 = 10%)
+_MIN_UPSIDE_PCT_UNIVERSE = Decimal("0.07") # DCF upside gate for universe candidates (0.07 = 7%)
 _MIN_CONVICTION_SCORE = Decimal("5")
 _POSITION_SIZE_USD = Decimal("1000")
 
@@ -53,7 +53,7 @@ async def _build_candidate(
             conviction_score=row.conviction_score,
             upside_pct=row.upside_pct,
             signal=_null_signal(ticker, strategy),
-            skip_reason=f"upside {row.upside_pct}% below {min_upside_pct}% threshold",
+            skip_reason=f"upside {float(row.upside_pct or 0)*100:.1f}% below {float(min_upside_pct)*100:.0f}% threshold",
         )
 
     # Gate 2: Conviction score
