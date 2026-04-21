@@ -62,9 +62,9 @@ export default function TickerPage({ params }: { params: Promise<{ symbol: strin
   const { symbol } = use(params);
   const sym = symbol.toUpperCase();
 
-  const { data: fundamentals } = useSWR<Fundamentals>(`/api/v1/fundamentals/${sym}`, fetchJSON);
-  const { data: val } = useSWR<Bundle>(`/api/v1/valuate/${sym}?include_monte_carlo=true`, (url: string) => fetchJSON<Bundle>(url, { method: "POST" }));
-  const { data: risk } = useSWR<Risk>(`/api/v1/risk/${sym}`, fetchJSON);
+  const { data: fundamentals } = useSWR<Fundamentals>(`${apiBase}/api/v1/fundamentals/${sym}`, fetchJSON);
+  const { data: val } = useSWR<Bundle>(`${apiBase}/api/v1/valuate/${sym}?include_monte_carlo=true`, (url: string) => fetchJSON<Bundle>(url, { method: "POST" }));
+  const { data: risk } = useSWR<Risk>(`${apiBase}/api/v1/risk/${sym}`, fetchJSON);
 
   if (!val) {
     return (
@@ -121,8 +121,8 @@ export default function TickerPage({ params }: { params: Promise<{ symbol: strin
           </div>
           <div className="flex flex-col items-end gap-3">
             <div className="flex gap-2">
-              <a className="rounded border border-[var(--navy)] bg-[var(--navy)] px-4 py-2 text-sm font-semibold text-white hover:opacity-90" href={`/api/v1/export/xlsx/${sym}`}>Export XLSX</a>
-              <a className="rounded border border-[var(--border-strong)] px-4 py-2 text-sm font-semibold text-[var(--ink)] hover:border-[var(--navy)]" href={`/api/v1/export/pdf/${sym}`}>PDF Memo</a>
+              <a className="rounded border border-[var(--navy)] bg-[var(--navy)] px-4 py-2 text-sm font-semibold text-white hover:opacity-90" href={`${apiBase}/api/v1/export/xlsx/${sym}`}>Export XLSX</a>
+              <a className="rounded border border-[var(--border-strong)] px-4 py-2 text-sm font-semibold text-[var(--ink)] hover:border-[var(--navy)]" href={`${apiBase}/api/v1/export/pdf/${sym}`}>PDF Memo</a>
             </div>
             <p className="text-xs text-[var(--muted)]">As of {val.dcf.as_of}</p>
           </div>
@@ -703,7 +703,7 @@ function BacktestCard({ sym }: { sym: string }) {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetchJSON<BacktestResult>(`/api/v1/backtest/${sym}?strategy=${strategy}&lookback_days=${lookback}`);
+      const res = await fetchJSON<BacktestResult>(`${apiBase}/api/v1/backtest/${sym}?strategy=${strategy}&lookback_days=${lookback}`);
       setResult(res);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Backtest failed");

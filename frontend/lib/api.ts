@@ -1,3 +1,6 @@
+export const apiBase =
+  process.env.NEXT_PUBLIC_API_URL?.replace(/\/$/, "") ?? "";
+
 export async function fetchJSON<T>(url: string, init?: RequestInit): Promise<T> {
   const r = await fetch(url, { ...init, cache: "no-store" });
   if (!r.ok) throw new Error(`${r.status} ${r.statusText}`);

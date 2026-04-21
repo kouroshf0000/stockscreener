@@ -31,12 +31,12 @@ type Report = {
 export default function HunterPage() {
   const [running, setRunning] = useState(false);
   const [report, setReport] = useState<Report | null>(null);
-  const { data: history } = useSWR<Report[]>("/api/v1/hunt/history", fetchJSON);
+  const { data: history } = useSWR<Report[]>(`${apiBase}/api/v1/hunt/history`, fetchJSON);
 
   async function run() {
     setRunning(true);
     try {
-      const res = await fetchJSON<Report>("/api/v1/hunt?universe=SP500&top_n=5&limit=20", { method: "POST" });
+      const res = await fetchJSON<Report>(`${apiBase}/api/v1/hunt?universe=SP500&top_n=5&limit=20`, { method: "POST" });
       setReport(res);
     } finally {
       setRunning(false);
@@ -236,13 +236,13 @@ function PickCard({ pick, rejected }: { pick: Pick; rejected?: boolean }) {
         {pick.deliverables?.xlsx && (
           <div className="flex gap-2">
             <a
-              href={`/api/v1/export/xlsx/${pick.ticker}`}
+              href={`${apiBase}/api/v1/export/xlsx/${pick.ticker}`}
               className="rounded border border-[var(--navy)] bg-[var(--navy)] px-3 py-1.5 text-xs font-semibold text-white hover:opacity-90"
             >
               XLSX
             </a>
             <a
-              href={`/api/v1/export/pdf/${pick.ticker}`}
+              href={`${apiBase}/api/v1/export/pdf/${pick.ticker}`}
               className="rounded border border-[var(--border-strong)] px-3 py-1.5 text-xs font-semibold text-[var(--ink)] hover:border-[var(--navy)]"
             >
               PDF Memo

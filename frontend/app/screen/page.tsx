@@ -89,7 +89,7 @@ export default function ScreenPage() {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetchJSON<ScreenResponse>("/api/v1/screen", {
+      const res = await fetchJSON<ScreenResponse>(`${apiBase}/api/v1/screen`, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ universe: "SP500", filters, etf_overlap: etf || null, limit: 50 }),

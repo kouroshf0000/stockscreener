@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { apiBase } from "@/lib/api";
 
 type SignalDirection = "long" | "short" | "no_trade";
 type Confidence = "low" | "medium" | "high";
@@ -111,7 +112,7 @@ export default function PaperTradingPage() {
   const fetchPositions = useCallback(async () => {
     setPosLoading(true);
     try {
-      const r = await fetch("/api/v1/trade/paper/positions");
+      const r = await fetch(`${apiBase}/api/v1/trade/paper/positions`);
       if (r.ok) setPositions(await r.json());
     } finally {
       setPosLoading(false);
@@ -125,7 +126,7 @@ export default function PaperTradingPage() {
     setSignals(null);
     setOrders([]);
     try {
-      const url = `/api/v1/trade/paper/run?strategy=${strategy}&top_n=${topN}&dry_run=${dryRun}`;
+      const url = `${apiBase}/api/v1/trade/paper/run?strategy=${strategy}&top_n=${topN}&dry_run=${dryRun}`;
       const r = await fetch(url, { method: "POST" });
       if (!r.ok) throw new Error(await r.text());
       const data = await r.json();
@@ -143,7 +144,7 @@ export default function PaperTradingPage() {
     setAnalyzing(true);
     setAnalysis(null);
     try {
-      const r = await fetch("/api/v1/trade/paper/analyze", { method: "POST" });
+      const r = await fetch(`${apiBase}/api/v1/trade/paper/analyze`, { method: "POST" });
       if (!r.ok) throw new Error(await r.text());
       setAnalysis(await r.json());
     } catch (e) {
@@ -155,7 +156,7 @@ export default function PaperTradingPage() {
 
   async function closePosition(ticker: string) {
     if (!confirm(`Close position in ${ticker}?`)) return;
-    const r = await fetch(`/api/v1/trade/paper/positions/${ticker}`, { method: "DELETE" });
+    const r = await fetch(`${apiBase}/api/v1/trade/paper/positions/${ticker}`, { method: "DELETE" });
     const data = await r.json();
     if (data.error) alert(data.error);
     fetchPositions();
