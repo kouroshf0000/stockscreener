@@ -1,0 +1,16 @@
+.env
+.env.*
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.git/
+.next/
+node_modules/
+frontend/node_modules/
+frontend/.next/
+*.tsbuildinfo
+.DS_Store
+supabase/.temp/
