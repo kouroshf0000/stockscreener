@@ -6,7 +6,7 @@
   "rewrites": [
     {
       "source": "/api/:path*",
-      "destination": "https://alpha-architect-api.onrender.com/api/:path*"
+      "destination": "https://stockscreener-3vlt.onrender.com/api/:path*"
     }
   ]
 }
