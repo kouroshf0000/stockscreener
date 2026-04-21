@@ -8,15 +8,16 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict
 
 from backend.filings.conviction_screener import ConvictionScreenRow, run_conviction_screener
+from backend.filings.universe_screener import run_universe_screen
 from backend.nlp.equity_researcher import ReasonedTradeSignal, reason_trade_signal
 from backend.technicals.tv_enrichment import fetch_tv_multiframe
 
 logger = logging.getLogger(__name__)
 
-# Minimum thresholds for a position to be considered
-_MIN_UPSIDE_PCT = Decimal("10")       # DCF must show at least 10% upside
-_MIN_CONVICTION_SCORE = Decimal("5")  # Conviction screener score
-_POSITION_SIZE_USD = Decimal("1000")  # Flat notional per position
+_MIN_UPSIDE_PCT_13F = Decimal("10")       # DCF upside gate for 13F conviction candidates
+_MIN_UPSIDE_PCT_UNIVERSE = Decimal("7")   # DCF upside gate for technical universe candidates
+_MIN_CONVICTION_SCORE = Decimal("5")
+_POSITION_SIZE_USD = Decimal("1000")
 
 
 class TradeCandidate(BaseModel):
@@ -36,13 +37,14 @@ async def _build_candidate(
     strategy: Literal["swing", "day"],
     exchange: str,
     screener: str,
+    min_upside_pct: Decimal = _MIN_UPSIDE_PCT_13F,
 ) -> TradeCandidate | None:
     ticker = row.ticker
     if ticker is None:
         return None
 
     # Gate 1: DCF upside
-    if row.upside_pct is None or row.upside_pct < _MIN_UPSIDE_PCT:
+    if row.upside_pct is None or row.upside_pct < min_upside_pct:
         logger.debug("skip %s: upside %s < threshold", ticker, row.upside_pct)
         return TradeCandidate(
             ticker=ticker,
@@ -51,7 +53,7 @@ async def _build_candidate(
             conviction_score=row.conviction_score,
             upside_pct=row.upside_pct,
             signal=_null_signal(ticker, strategy),
-            skip_reason=f"upside {row.upside_pct}% below {_MIN_UPSIDE_PCT}% threshold",
+            skip_reason=f"upside {row.upside_pct}% below {min_upside_pct}% threshold",
         )
 
     # Gate 2: Conviction score
@@ -133,20 +135,49 @@ async def generate_signals(
     screener: str = "america",
 ) -> SignalBatch:
     """
-    Full pipeline: conviction screener → DCF gate → TV technicals → Claude signal.
-    Returns all candidates (actionable + skipped) for transparency.
+    Two-track pipeline:
+      Track A — 13F conviction screener (top_n, DCF gate ≥10%)
+      Track B — SP500+NDX technical universe (RSI<40, uptrend, BUY/STRONG_BUY, DCF gate ≥7%)
+    Both tracks run concurrently; results are merged and deduplicated by ticker.
     Claude API calls run sequentially to avoid rate pressure.
     """
-    screen = await run_conviction_screener(top_n=top_n)
-    actionable_rows = [r for r in screen.rows if r.ticker is not None and r.status == "ok"]
+    screen, universe_rows = await asyncio.gather(
+        run_conviction_screener(top_n=top_n),
+        run_universe_screen(min_upside_pct=_MIN_UPSIDE_PCT_UNIVERSE),
+    )
 
+    # Build 13F candidates
+    seen_tickers: set[str] = set()
     candidates: list[TradeCandidate] = []
-    for row in actionable_rows:
-        candidate = await _build_candidate(row, strategy, exchange, screener)
+
+    conviction_rows = [r for r in screen.rows if r.ticker is not None and r.status == "ok"]
+    for row in conviction_rows:
+        candidate = await _build_candidate(
+            row, strategy, exchange, screener, min_upside_pct=_MIN_UPSIDE_PCT_13F
+        )
         if candidate:
+            if candidate.ticker:
+                seen_tickers.add(candidate.ticker)
+            candidates.append(candidate)
+
+    # Build universe candidates — skip tickers already covered by 13F track
+    for row in universe_rows:
+        if row.ticker in seen_tickers:
+            logger.debug("universe dedup skip %s (already in 13F track)", row.ticker)
+            continue
+        candidate = await _build_candidate(
+            row, strategy, exchange, screener, min_upside_pct=_MIN_UPSIDE_PCT_UNIVERSE
+        )
+        if candidate:
+            if candidate.ticker:
+                seen_tickers.add(candidate.ticker)
             candidates.append(candidate)
 
     actionable = sum(1 for c in candidates if c.side != "no_trade")
+    logger.info(
+        "signals merged | 13f=%d universe=%d total=%d actionable=%d",
+        len(conviction_rows), len(universe_rows), len(candidates), actionable,
+    )
 
     return SignalBatch(
         strategy=strategy,

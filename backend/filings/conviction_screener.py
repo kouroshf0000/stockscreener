@@ -147,6 +147,7 @@ class ConvictionScreenRow(BaseModel):
     implied_price: Decimal | None
     current_price: Decimal | None
     status: ValuationStatus
+    source: str = "13f"
 
 
 class ConvictionScreenerResponse(BaseModel):
