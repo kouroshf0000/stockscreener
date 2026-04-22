@@ -204,7 +204,7 @@ async def run_conviction_screener(
     top_n: int = 10,
     min_weight_pct: float = 1.0,
     min_buyers: int = 1,
-    valuation_timeout: float = 45.0,
+    valuation_timeout: float = 90.0,
 ) -> ConvictionScreenerResponse:
     signal = await run_conviction_signal(
         min_weight_pct=min_weight_pct,

@@ -175,7 +175,7 @@ async def run_universe_screen(
     rows: list[ConvictionScreenRow] = []
     for rank, (ticker, snap) in enumerate(dcf_batch, start=1):
         upside, implied, current, status = await _safe_valuate(
-            ticker, timeout=45.0, sem=dcf_sem
+            ticker, timeout=90.0, sem=dcf_sem
         )
         if status != "ok" or upside is None or upside < min_upside_pct:
             logger.debug("universe_long_dcf skip %s | status=%s upside=%s", ticker, status, upside)
@@ -215,7 +215,7 @@ async def run_short_universe_screen(
     rows: list[ConvictionScreenRow] = []
     for rank, (ticker, snap) in enumerate(dcf_batch, start=1):
         upside, implied, current, status = await _safe_valuate(
-            ticker, timeout=45.0, sem=dcf_sem
+            ticker, timeout=90.0, sem=dcf_sem
         )
         if status != "ok" or upside is None or upside > max_downside_pct:
             logger.debug("universe_short_dcf skip %s | status=%s upside=%s", ticker, status, upside)

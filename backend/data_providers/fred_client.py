@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from datetime import date
 from decimal import Decimal
 
@@ -9,6 +10,10 @@ from tenacity import retry, stop_after_attempt, wait_exponential
 from backend.app.config import get_settings
 from backend.data_providers.cache import cached, key
 from backend.data_providers.models import RiskFreeRate
+
+logger = logging.getLogger(__name__)
+
+_FALLBACK_RFR = Decimal("0.045")
 
 FRED_URL = "https://api.stlouisfed.org/fred/series/observations"
 DEFAULT_SERIES = "DGS10"
@@ -39,10 +44,14 @@ async def _fetch(series_id: str) -> RiskFreeRate:
 
 
 async def fetch_risk_free_rate(series_id: str = DEFAULT_SERIES) -> RiskFreeRate:
-    redis_key = key("fred", series_id, date.today().isoformat())
-    return await cached(
-        redis_key,
-        get_settings().cache_ttl_fundamentals_s,
-        RiskFreeRate,
-        lambda: _fetch(series_id),
-    )
+    try:
+        redis_key = key("fred", series_id, date.today().isoformat())
+        return await cached(
+            redis_key,
+            get_settings().cache_ttl_fundamentals_s,
+            RiskFreeRate,
+            lambda: _fetch(series_id),
+        )
+    except Exception as e:
+        logger.warning("FRED unavailable (%s), using fallback RFR %.1f%%", e, float(_FALLBACK_RFR) * 100)
+        return RiskFreeRate(rate=_FALLBACK_RFR, as_of=date.today(), series_id=series_id)
