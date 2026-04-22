@@ -8,14 +8,15 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict
 
 from backend.filings.conviction_screener import ConvictionScreenRow, run_conviction_screener
-from backend.filings.universe_screener import run_universe_screen
+from backend.filings.universe_screener import run_short_universe_screen, run_universe_screen
 from backend.nlp.equity_researcher import ReasonedTradeSignal, reason_trade_signal
 from backend.technicals.tv_enrichment import fetch_tv_multiframe
 
 logger = logging.getLogger(__name__)
 
-_MIN_UPSIDE_PCT_13F = Decimal("0.10")      # DCF upside gate for 13F candidates (stored as fraction: 0.10 = 10%)
-_MIN_UPSIDE_PCT_UNIVERSE = Decimal("0.07") # DCF upside gate for universe candidates (0.07 = 7%)
+_MIN_UPSIDE_PCT_13F = Decimal("0.10")       # DCF upside gate for 13F long candidates
+_MIN_UPSIDE_PCT_UNIVERSE = Decimal("0.07")  # DCF upside gate for universe long candidates
+_MAX_DOWNSIDE_PCT_13F = Decimal("-0.20")    # DCF downside gate for 13F short candidates (≥20% overvalued)
 _MIN_CONVICTION_SCORE = Decimal("5")
 _POSITION_SIZE_USD = Decimal("1000")
 
@@ -38,25 +39,38 @@ async def _build_candidate(
     exchange: str,
     screener: str,
     min_upside_pct: Decimal = _MIN_UPSIDE_PCT_13F,
+    direction: Literal["long", "short"] = "long",
 ) -> TradeCandidate | None:
     ticker = row.ticker
     if ticker is None:
         return None
 
-    # Gate 1: DCF upside
-    if row.upside_pct is None or row.upside_pct < min_upside_pct:
-        logger.debug("skip %s: upside %s < threshold", ticker, row.upside_pct)
-        return TradeCandidate(
-            ticker=ticker,
-            side="no_trade",
-            notional_usd=Decimal("0"),
-            conviction_score=row.conviction_score,
-            upside_pct=row.upside_pct,
-            signal=_null_signal(ticker, strategy),
-            skip_reason=f"upside {float(row.upside_pct or 0)*100:.1f}% below {float(min_upside_pct)*100:.0f}% threshold",
-        )
+    # Gate 1: DCF gate — long needs positive upside, short needs negative (overvalued)
+    if direction == "long":
+        if row.upside_pct is None or row.upside_pct < min_upside_pct:
+            return TradeCandidate(
+                ticker=ticker,
+                side="no_trade",
+                notional_usd=Decimal("0"),
+                conviction_score=row.conviction_score,
+                upside_pct=row.upside_pct,
+                signal=_null_signal(ticker, strategy),
+                skip_reason=f"upside {float(row.upside_pct or 0)*100:.1f}% below {float(min_upside_pct)*100:.0f}% threshold",
+            )
+    else:
+        # For shorts min_upside_pct is used as max_downside (a negative number)
+        if row.upside_pct is None or row.upside_pct > min_upside_pct:
+            return TradeCandidate(
+                ticker=ticker,
+                side="no_trade",
+                notional_usd=Decimal("0"),
+                conviction_score=row.conviction_score,
+                upside_pct=row.upside_pct,
+                signal=_null_signal(ticker, strategy),
+                skip_reason=f"downside {float(row.upside_pct or 0)*100:.1f}% insufficient for short (need < {float(min_upside_pct)*100:.0f}%)",
+            )
 
-    # Gate 2: Conviction score
+    # Gate 2: Conviction score (shorts from universe screener have score=5, always pass)
     if row.conviction_score < _MIN_CONVICTION_SCORE:
         return TradeCandidate(
             ticker=ticker,
@@ -135,38 +149,79 @@ async def generate_signals(
     screener: str = "america",
 ) -> SignalBatch:
     """
-    Two-track pipeline:
-      Track A — 13F conviction screener (top_n, DCF gate ≥10%)
-      Track B — SP500+NDX technical universe (RSI<40, uptrend, BUY/STRONG_BUY, DCF gate ≥7%)
-    Both tracks run concurrently; results are merged and deduplicated by ticker.
-    Claude API calls run sequentially to avoid rate pressure.
+    Four-track pipeline:
+      Track A — 13F conviction longs   (DCF upside ≥10%)
+      Track B — Universe longs         (RSI<40, uptrend, BUY/STRONG_BUY, DCF upside ≥7%)
+      Track C — Universe shorts        (RSI>60, downtrend, SELL/STRONG_SELL, DCF downside ≥15%)
+      Track D — 13F conviction shorts  (DCF overvalued ≥20% — evaluated by Claude for short signal)
+    All screeners run concurrently; Claude calls run sequentially.
     """
-    screen, universe_rows = await asyncio.gather(
+    screen, universe_long_rows, universe_short_rows = await asyncio.gather(
         run_conviction_screener(top_n=top_n),
         run_universe_screen(min_upside_pct=_MIN_UPSIDE_PCT_UNIVERSE),
+        run_short_universe_screen(max_downside_pct=Decimal("-0.15")),
     )
 
-    # Build 13F candidates
     seen_tickers: set[str] = set()
     candidates: list[TradeCandidate] = []
 
+    # Track A: 13F conviction longs
     conviction_rows = [r for r in screen.rows if r.ticker is not None and r.status == "ok"]
     for row in conviction_rows:
         candidate = await _build_candidate(
-            row, strategy, exchange, screener, min_upside_pct=_MIN_UPSIDE_PCT_13F
+            row, strategy, exchange, screener,
+            min_upside_pct=_MIN_UPSIDE_PCT_13F,
+            direction="long",
         )
         if candidate:
             if candidate.ticker:
                 seen_tickers.add(candidate.ticker)
             candidates.append(candidate)
 
-    # Build universe candidates — skip tickers already covered by 13F track
-    for row in universe_rows:
+    # Track B: Universe longs
+    for row in universe_long_rows:
         if row.ticker in seen_tickers:
             logger.debug("universe dedup skip %s (already in 13F track)", row.ticker)
             continue
         candidate = await _build_candidate(
-            row, strategy, exchange, screener, min_upside_pct=_MIN_UPSIDE_PCT_UNIVERSE
+            row, strategy, exchange, screener,
+            min_upside_pct=_MIN_UPSIDE_PCT_UNIVERSE,
+            direction="long",
+        )
+        if candidate:
+            if candidate.ticker:
+                seen_tickers.add(candidate.ticker)
+            candidates.append(candidate)
+
+    # Track C: Universe shorts (RSI overbought + SELL signal + DCF overvalued)
+    for row in universe_short_rows:
+        if row.ticker in seen_tickers:
+            logger.debug("short dedup skip %s (already processed)", row.ticker)
+            continue
+        candidate = await _build_candidate(
+            row, strategy, exchange, screener,
+            min_upside_pct=Decimal("-0.15"),  # used as max_downside for shorts
+            direction="short",
+        )
+        if candidate:
+            if candidate.ticker:
+                seen_tickers.add(candidate.ticker)
+            candidates.append(candidate)
+
+    # Track D: 13F tickers that are massively overvalued → evaluate as shorts
+    conviction_short_rows = [
+        r for r in screen.rows
+        if r.ticker is not None
+        and r.status == "ok"
+        and r.ticker not in seen_tickers
+        and r.upside_pct is not None
+        and r.upside_pct <= _MAX_DOWNSIDE_PCT_13F
+    ]
+    for row in conviction_short_rows:
+        candidate = await _build_candidate(
+            row, strategy, exchange, screener,
+            min_upside_pct=_MAX_DOWNSIDE_PCT_13F,
+            direction="short",
         )
         if candidate:
             if candidate.ticker:
@@ -174,9 +229,14 @@ async def generate_signals(
             candidates.append(candidate)
 
     actionable = sum(1 for c in candidates if c.side != "no_trade")
+    actionable_longs = sum(1 for c in candidates if c.side == "long")
+    actionable_shorts = sum(1 for c in candidates if c.side == "short")
     logger.info(
-        "signals merged | 13f=%d universe=%d total=%d actionable=%d",
-        len(conviction_rows), len(universe_rows), len(candidates), actionable,
+        "signals merged | 13f=%d universe_long=%d universe_short=%d 13f_shorts=%d "
+        "total=%d actionable=%d (long=%d short=%d)",
+        len(conviction_rows), len(universe_long_rows), len(universe_short_rows),
+        len(conviction_short_rows), len(candidates), actionable,
+        actionable_longs, actionable_shorts,
     )
 
     return SignalBatch(
