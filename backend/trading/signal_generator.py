@@ -19,6 +19,7 @@ _MIN_UPSIDE_PCT_UNIVERSE = Decimal("0.07")  # DCF upside gate for universe long 
 _MAX_DOWNSIDE_PCT_13F = Decimal("-0.20")    # DCF downside gate for 13F short candidates (≥20% overvalued)
 _MIN_CONVICTION_SCORE = Decimal("5")
 _POSITION_SIZE_USD = Decimal("1000")
+_MAX_CLAUDE_CALLS = 12               # hard cap: ~$0.02/call × 12 = ~$0.24 max per run
 
 
 class TradeCandidate(BaseModel):
@@ -40,6 +41,7 @@ async def _build_candidate(
     screener: str,
     min_upside_pct: Decimal = _MIN_UPSIDE_PCT_13F,
     direction: Literal["long", "short"] = "long",
+    claude_budget: list[int] | None = None,
 ) -> TradeCandidate | None:
     ticker = row.ticker
     if ticker is None:
@@ -81,6 +83,20 @@ async def _build_candidate(
             signal=_null_signal(ticker, strategy),
             skip_reason=f"conviction score {row.conviction_score} below {_MIN_CONVICTION_SCORE}",
         )
+
+    # Gate 3: Claude call budget check
+    if claude_budget is not None:
+        if claude_budget[0] <= 0:
+            return TradeCandidate(
+                ticker=ticker,
+                side="no_trade",
+                notional_usd=Decimal("0"),
+                conviction_score=row.conviction_score,
+                upside_pct=row.upside_pct,
+                signal=_null_signal(ticker, strategy),
+                skip_reason=f"Claude call cap {_MAX_CLAUDE_CALLS} reached",
+            )
+        claude_budget[0] -= 1
 
     # Gate 3: Multi-timeframe technicals → Claude reasoning
     timeframes = await fetch_tv_multiframe(
@@ -164,6 +180,7 @@ async def generate_signals(
 
     seen_tickers: set[str] = set()
     candidates: list[TradeCandidate] = []
+    claude_budget: list[int] = [_MAX_CLAUDE_CALLS]
 
     # Track A: 13F conviction longs
     conviction_rows = [r for r in screen.rows if r.ticker is not None and r.status == "ok"]
@@ -172,6 +189,7 @@ async def generate_signals(
             row, strategy, exchange, screener,
             min_upside_pct=_MIN_UPSIDE_PCT_13F,
             direction="long",
+            claude_budget=claude_budget,
         )
         if candidate:
             if candidate.ticker:
@@ -187,6 +205,7 @@ async def generate_signals(
             row, strategy, exchange, screener,
             min_upside_pct=_MIN_UPSIDE_PCT_UNIVERSE,
             direction="long",
+            claude_budget=claude_budget,
         )
         if candidate:
             if candidate.ticker:
@@ -202,6 +221,7 @@ async def generate_signals(
             row, strategy, exchange, screener,
             min_upside_pct=Decimal("-0.15"),  # used as max_downside for shorts
             direction="short",
+            claude_budget=claude_budget,
         )
         if candidate:
             if candidate.ticker:
@@ -222,21 +242,23 @@ async def generate_signals(
             row, strategy, exchange, screener,
             min_upside_pct=_MAX_DOWNSIDE_PCT_13F,
             direction="short",
+            claude_budget=claude_budget,
         )
         if candidate:
             if candidate.ticker:
                 seen_tickers.add(candidate.ticker)
             candidates.append(candidate)
 
+    claude_used = _MAX_CLAUDE_CALLS - claude_budget[0]
     actionable = sum(1 for c in candidates if c.side != "no_trade")
     actionable_longs = sum(1 for c in candidates if c.side == "long")
     actionable_shorts = sum(1 for c in candidates if c.side == "short")
     logger.info(
         "signals merged | 13f=%d universe_long=%d universe_short=%d 13f_shorts=%d "
-        "total=%d actionable=%d (long=%d short=%d)",
+        "total=%d actionable=%d (long=%d short=%d) claude_calls=%d/%d",
         len(conviction_rows), len(universe_long_rows), len(universe_short_rows),
         len(conviction_short_rows), len(candidates), actionable,
-        actionable_longs, actionable_shorts,
+        actionable_longs, actionable_shorts, claude_used, _MAX_CLAUDE_CALLS,
     )
 
     return SignalBatch(

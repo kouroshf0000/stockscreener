@@ -215,7 +215,8 @@ async def reason_trade_signal(
     strategy: Literal["swing", "day"] = "swing",
 ) -> ReasonedTradeSignal:
     """
-    Ask Claude Opus to reason through a swing or day trade signal.
+    Ask Claude Sonnet to reason through a swing or day trade signal.
+    Uses Sonnet (not Opus) to stay within per-run cost budget (~$0.02/call vs ~$0.18).
     timeframes: dict keyed by interval ('1D','4H','1H','15m') → TV indicator dict.
     """
     client = _get_client()
@@ -238,10 +239,8 @@ For no_trade set both to 0.0.
 Return a JSON object matching the ReasonedTradeSignal schema exactly."""
 
     response = await client.messages.parse(
-        model="claude-opus-4-7",
-        max_tokens=4096,
-        thinking={"type": "adaptive"},
-        output_config={"effort": "high"},
+        model="claude-sonnet-4-6",
+        max_tokens=2048,
         system=[{
             "type": "text",
             "text": _EQUITY_RESEARCHER_SYSTEM,
