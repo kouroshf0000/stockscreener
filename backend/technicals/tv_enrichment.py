@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import time
 from typing import Literal
 
 from tradingview_ta import Interval, TA_Handler
@@ -17,42 +18,46 @@ _INTERVAL_MAP: dict[str, str] = {
 
 
 def _fetch_sync(ticker: str, screener: str, exchange: str, interval: str) -> dict | None:
-    try:
-        handler = TA_Handler(
-            symbol=ticker,
-            screener=screener,
-            exchange=exchange,
-            interval=interval,
-        )
-        a = handler.get_analysis()
-        ind = a.indicators
-        patterns = [k for k, v in ind.items() if k.startswith("Candle.") and v != 0]
-        return {
-            "recommendation": a.summary.get("RECOMMENDATION"),
-            "buy_signals": a.summary.get("BUY", 0),
-            "sell_signals": a.summary.get("SELL", 0),
-            "neutral_signals": a.summary.get("NEUTRAL", 0),
-            "rsi": ind.get("RSI"),
-            "rsi_ema": ind.get("RSI[1]"),
-            "macd_macd": ind.get("MACD.macd"),
-            "macd_signal": ind.get("MACD.signal"),
-            "ema_20": ind.get("EMA20"),
-            "ema_50": ind.get("EMA50"),
-            "ema_200": ind.get("EMA200"),
-            "sma_50": ind.get("SMA50"),
-            "sma_200": ind.get("SMA200"),
-            "bb_upper": ind.get("BB.upper"),
-            "bb_lower": ind.get("BB.lower"),
-            "bb_pct_b": ind.get("BBP"),
-            "adx": ind.get("ADX"),
-            "atr": ind.get("ATR"),
-            "volume": ind.get("volume"),
-            "close": ind.get("close"),
-            "patterns": patterns,
-        }
-    except Exception as e:
-        logger.debug("tradingview-ta failed for %s [%s]: %s", ticker, interval, e)
-        return None
+    for attempt in range(3):
+        try:
+            handler = TA_Handler(
+                symbol=ticker,
+                screener=screener,
+                exchange=exchange,
+                interval=interval,
+            )
+            a = handler.get_analysis()
+            ind = a.indicators
+            patterns = [k for k, v in ind.items() if k.startswith("Candle.") and v != 0]
+            return {
+                "recommendation": a.summary.get("RECOMMENDATION"),
+                "buy_signals": a.summary.get("BUY", 0),
+                "sell_signals": a.summary.get("SELL", 0),
+                "neutral_signals": a.summary.get("NEUTRAL", 0),
+                "rsi": ind.get("RSI"),
+                "rsi_ema": ind.get("RSI[1]"),
+                "macd_macd": ind.get("MACD.macd"),
+                "macd_signal": ind.get("MACD.signal"),
+                "ema_20": ind.get("EMA20"),
+                "ema_50": ind.get("EMA50"),
+                "ema_200": ind.get("EMA200"),
+                "sma_50": ind.get("SMA50"),
+                "sma_200": ind.get("SMA200"),
+                "bb_upper": ind.get("BB.upper"),
+                "bb_lower": ind.get("BB.lower"),
+                "bb_pct_b": ind.get("BBP"),
+                "adx": ind.get("ADX"),
+                "atr": ind.get("ATR"),
+                "volume": ind.get("volume"),
+                "close": ind.get("close"),
+                "patterns": patterns,
+            }
+        except Exception as e:
+            if attempt < 2:
+                time.sleep(2 ** attempt)  # 1s, 2s back-off
+            else:
+                logger.debug("tradingview-ta failed for %s [%s] after 3 attempts: %s", ticker, interval, e)
+    return None
 
 
 async def fetch_tv_analysis(

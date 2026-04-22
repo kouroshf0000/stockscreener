@@ -167,11 +167,11 @@ Be specific and data-driven. If there are no losing trades, say so clearly and r
     response = await _get_anthropic().messages.parse(
         model="claude-opus-4-7",
         max_tokens=4096,
-        thinking={"type": "adaptive"},
         messages=[{"role": "user", "content": prompt}],
         output_format=LossAnalysis,
     )
-    analysis = response.parsed
+    # response.content[0] is a ToolUseBlock; .parsed holds the Pydantic model
+    analysis: LossAnalysis = response.content[0].parsed  # type: ignore[union-attr]
     return LossAnalysis(
         analyzed_at=datetime.now(timezone.utc).isoformat(),
         total_positions_reviewed=analysis.total_positions_reviewed,
