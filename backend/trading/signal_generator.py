@@ -181,7 +181,7 @@ async def generate_signals(
 
     # Let TradingView rate limits reset after ~1300 tech-screen requests before
     # firing per-candidate multiframe calls.
-    await asyncio.sleep(30)
+    await asyncio.sleep(120)
 
     seen_tickers: set[str] = set()
     candidates: list[TradeCandidate] = []
