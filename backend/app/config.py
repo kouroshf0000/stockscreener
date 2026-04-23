@@ -10,6 +10,7 @@ class Settings(BaseSettings):
 
     anthropic_api_key: str = ""
     fred_api_key: str = ""
+    fmp_api_key: str = ""        # financialmodelingprep.com — free tier: 250 req/day
 
     alpaca_api_key: str = ""
     alpaca_secret_key: str = ""

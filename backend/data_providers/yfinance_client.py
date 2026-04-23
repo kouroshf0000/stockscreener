@@ -181,10 +181,19 @@ def _fetch_sync(ticker: str) -> Fundamentals:
         forward_pe=_dec(info.get("forwardPE")),
         forward_eps=_dec(info.get("forwardEps")),
         segments=segments,
+        # Additional market signals
+        short_pct_float=_dec(info.get("shortPercentOfFloat")),
+        held_pct_institutions=_dec(info.get("heldPercentInstitutions")),
+        earnings_growth=_dec(info.get("earningsGrowth")),
     )
 
 
 async def fetch_fundamentals(ticker: str) -> Fundamentals:
+    # Thin alias kept for callers that only need yfinance base data.
+    return await _fetch_base_fundamentals(ticker)
+
+
+async def _fetch_base_fundamentals(ticker: str) -> Fundamentals:
     settings = get_settings()
     sym = ticker.upper()
     redis_key = key("fundamentals", sym, date.today().isoformat())
@@ -193,6 +202,67 @@ async def fetch_fundamentals(ticker: str) -> Fundamentals:
         return await asyncio.to_thread(_fetch_sync, sym)
 
     return await cached(redis_key, settings.cache_ttl_fundamentals_s, Fundamentals, loader)
+
+
+async def fetch_enriched_fundamentals(ticker: str) -> Fundamentals:
+    """
+    Full enrichment pipeline:
+      1. yfinance base fundamentals (cached 24h)
+      2. FMP analyst forward estimates (optional — needs FMP_API_KEY)
+      3. SEC XBRL 10-year revenue history (free, no key)
+      4. FRED credit spreads (free, needs FRED_API_KEY)
+    All enrichment sources fail gracefully — base fundamentals always returned.
+    """
+    from backend.data_providers.fmp_client import fetch_analyst_estimates
+    from backend.data_providers.sec_xbrl_client import fetch_xbrl_financials
+    from backend.data_providers.fred_client import fetch_credit_spreads
+    from backend.filings.discovery import resolve_cik
+
+    base = await _fetch_base_fundamentals(ticker)
+    updates: dict = {}
+
+    # Run all enrichment sources concurrently
+    fmp_task = fetch_analyst_estimates(ticker)
+    spreads_task = fetch_credit_spreads()
+
+    # CIK needed for XBRL — resolve first
+    cik_res = await resolve_cik(ticker)
+    if cik_res is not None:
+        xbrl_task = fetch_xbrl_financials(cik_res.cik)
+    else:
+        import asyncio as _asyncio
+        xbrl_task = _asyncio.sleep(0, result={})  # type: ignore[assignment]
+
+    import asyncio as _asyncio
+    fmp_data, spreads_data, xbrl_data = await _asyncio.gather(
+        fmp_task, spreads_task, xbrl_task, return_exceptions=True
+    )
+
+    # FMP analyst forward estimates
+    if isinstance(fmp_data, dict) and fmp_data:
+        updates.update(fmp_data)
+        # Compute forward revenue growth if we have TTM revenue
+        rev_next = fmp_data.get("analyst_revenue_next_y")
+        ttm_rev = base.revenue
+        if rev_next and ttm_rev and ttm_rev > 0:
+            updates["analyst_revenue_growth_next_y"] = (rev_next / ttm_rev) - Decimal("1")
+
+    # FRED credit spreads
+    if isinstance(spreads_data, dict):
+        if "hy_spread" in spreads_data:
+            updates["credit_spread_hy"] = spreads_data["hy_spread"]
+        if "ig_spread" in spreads_data:
+            updates["credit_spread_ig"] = spreads_data["ig_spread"]
+
+    # SEC XBRL 10-year revenue history
+    if isinstance(xbrl_data, dict):
+        rev_history = xbrl_data.get("revenue", {})
+        if rev_history:
+            updates["xbrl_revenue_10y"] = rev_history
+
+    if not updates:
+        return base
+    return base.model_copy(update=updates)
 
 
 @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=0.5, max=4))

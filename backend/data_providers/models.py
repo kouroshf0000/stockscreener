@@ -63,6 +63,25 @@ class Fundamentals(BaseModel):
     # Segment revenue breakdown {segment_name: revenue} — populated when available
     segments: dict[str, Decimal] = Field(default_factory=dict)
 
+    # Additional yfinance signals
+    short_pct_float: Decimal | None = None         # short interest as % of float
+    held_pct_institutions: Decimal | None = None   # institutional ownership %
+    earnings_growth: Decimal | None = None         # forward EPS growth (yfinance)
+
+    # FMP analyst forward estimates (next fiscal year)
+    analyst_revenue_next_y: Decimal | None = None
+    analyst_revenue_next_y_low: Decimal | None = None
+    analyst_revenue_next_y_high: Decimal | None = None
+    analyst_eps_next_y: Decimal | None = None
+    analyst_revenue_growth_next_y: Decimal | None = None  # derived: next_y / ttm - 1
+
+    # FRED credit spreads (fraction, e.g. 0.034 = 3.4%)
+    credit_spread_hy: Decimal | None = None
+    credit_spread_ig: Decimal | None = None
+
+    # SEC XBRL 10-year annual revenue history {year: revenue_usd}
+    xbrl_revenue_10y: dict[int, Decimal] = Field(default_factory=dict)
+
 
 class Quote(BaseModel):
     model_config = ConfigDict(frozen=True)

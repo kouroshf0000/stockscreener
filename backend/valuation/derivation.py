@@ -69,6 +69,24 @@ def _revenue_cagr(statements: list[FinancialStatement], years: int = 3) -> Decim
     return Decimal(str(round(cagr, 6)))
 
 
+def _xbrl_cagr(history: dict[int, Decimal], years: int) -> Decimal | None:
+    """Compute revenue CAGR from SEC XBRL 10-year history dict {year: revenue}."""
+    if len(history) < years + 1:
+        return None
+    sorted_years = sorted(history.keys(), reverse=True)
+    if len(sorted_years) < years + 1:
+        return None
+    recent_rev = history[sorted_years[0]]
+    old_rev = history[sorted_years[years]]
+    if recent_rev <= 0 or old_rev <= 0:
+        return None
+    ratio = float(recent_rev) / float(old_rev)
+    if ratio <= 0:
+        return None
+    cagr = ratio ** (1 / years) - 1
+    return Decimal(str(round(cagr, 6)))
+
+
 def _avg_ratio(
     statements: list[FinancialStatement],
     num: str,
@@ -283,9 +301,14 @@ async def derive_assumptions(
 
     reinv = _reinvestment_rate_from_components(f.statements, marginal_tax, profile)
 
-    hist_cagr = _revenue_cagr(f.statements, years=3)
-    if hist_cagr is None:
-        hist_cagr = _revenue_cagr(f.statements, years=2)
+    # Historical CAGR: prefer SEC XBRL 10Y history (more years = more stable signal).
+    # Fall back to yfinance statements (4Y) if XBRL unavailable.
+    hist_cagr = (
+        _xbrl_cagr(f.xbrl_revenue_10y, years=5)
+        or _xbrl_cagr(f.xbrl_revenue_10y, years=3)
+        or _revenue_cagr(f.statements, years=3)
+        or _revenue_cagr(f.statements, years=2)
+    )
 
     # Sustainable growth rate = ROE × retention ratio (free, Modigliani-Miller).
     # Use as a cross-check / blend when historical CAGR is unavailable or extreme.
@@ -307,12 +330,21 @@ async def derive_assumptions(
     elif sgr is not None:
         hist_cagr = hist_cagr * Decimal("0.70") + sgr * Decimal("0.30")
 
-    # Blend in TTM revenue growth signal (most recent 12-month actuals from yfinance).
-    # Captures deceleration/acceleration that a 3Y CAGR smears over.
-    # Weight: 40% recent momentum, 60% historical CAGR.
-    recent_growth = f.revenue_growth  # trailing YoY from yfinance info
-    if recent_growth is not None and hist_cagr is not None:
+    # FMP analyst forward revenue growth — strongest Y1 signal when available.
+    # This is the actual sell-side consensus, not a backward-looking computation.
+    fmp_growth = f.analyst_revenue_growth_next_y
+    recent_growth = f.revenue_growth  # trailing YoY from yfinance (backward-looking)
+
+    if fmp_growth is not None and hist_cagr is not None:
+        # 50% forward analyst consensus, 35% historical CAGR, 15% TTM momentum
+        ttm_weight = Decimal("0.15") if recent_growth is not None else Decimal("0")
+        ttm_contrib = (recent_growth or Decimal("0")) * ttm_weight
+        hist_cagr = fmp_growth * Decimal("0.50") + hist_cagr * (Decimal("0.50") - ttm_weight) + ttm_contrib
+    elif recent_growth is not None and hist_cagr is not None:
+        # No FMP: 60% historical CAGR, 40% TTM momentum
         hist_cagr = hist_cagr * Decimal("0.60") + recent_growth * Decimal("0.40")
+    elif fmp_growth is not None:
+        hist_cagr = fmp_growth
     elif recent_growth is not None:
         hist_cagr = recent_growth
 

@@ -43,6 +43,29 @@ async def _fetch(series_id: str) -> RiskFreeRate:
     return RiskFreeRate(rate=rate, as_of=as_of, series_id=series_id)
 
 
+_CREDIT_SPREAD_SERIES = {
+    "hy_spread": "BAMLH0A0HYM2",   # ICE BofA US High Yield OAS
+    "ig_spread": "BAMLC0A0CMEY",   # ICE BofA US Corp Investment Grade OAS
+}
+
+
+async def fetch_credit_spreads() -> dict[str, Decimal]:
+    """
+    Returns {"hy_spread": <pct as decimal>, "ig_spread": <pct as decimal>}.
+    Both expressed as fractions (e.g. 0.034 = 3.4%).
+    Returns empty dict if FRED is unavailable.
+    """
+    results: dict[str, Decimal] = {}
+    for label, series_id in _CREDIT_SPREAD_SERIES.items():
+        try:
+            rfr = await _fetch(series_id)
+            # FRED reports spreads in percentage points (e.g. 3.4 = 3.4%)
+            results[label] = rfr.rate / Decimal("100") if rfr.rate > Decimal("1") else rfr.rate
+        except Exception as e:
+            logger.debug("credit spread fetch failed (%s): %s", series_id, e)
+    return results
+
+
 async def fetch_risk_free_rate(series_id: str = DEFAULT_SERIES) -> RiskFreeRate:
     try:
         redis_key = key("fred", series_id, date.today().isoformat())

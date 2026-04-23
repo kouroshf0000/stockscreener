@@ -159,6 +159,26 @@ def _build_dcf_context(
         "debt_to_equity": round(float(f.debt_to_equity), 2) if f.debt_to_equity else None,
         "beta": round(float(f.beta), 2) if f.beta else None,
         "analyst_consensus": analyst_ctx,
+        "analyst_forward_estimates": {
+            "revenue_next_y_bn": round(float(f.analyst_revenue_next_y) / 1e9, 2) if f.analyst_revenue_next_y else None,
+            "revenue_next_y_low_bn": round(float(f.analyst_revenue_next_y_low) / 1e9, 2) if f.analyst_revenue_next_y_low else None,
+            "revenue_next_y_high_bn": round(float(f.analyst_revenue_next_y_high) / 1e9, 2) if f.analyst_revenue_next_y_high else None,
+            "eps_next_y": round(float(f.analyst_eps_next_y), 2) if f.analyst_eps_next_y else None,
+            "revenue_growth_next_y_pct": round(float(f.analyst_revenue_growth_next_y) * 100, 1) if f.analyst_revenue_growth_next_y else None,
+        },
+        "market_signals": {
+            "short_pct_float": round(float(f.short_pct_float) * 100, 1) if f.short_pct_float else None,
+            "held_pct_institutions": round(float(f.held_pct_institutions) * 100, 1) if f.held_pct_institutions else None,
+            "earnings_growth_pct": round(float(f.earnings_growth) * 100, 1) if f.earnings_growth else None,
+        },
+        "credit_environment": {
+            "hy_spread_pct": round(float(f.credit_spread_hy) * 100, 2) if f.credit_spread_hy else None,
+            "ig_spread_pct": round(float(f.credit_spread_ig) * 100, 2) if f.credit_spread_ig else None,
+        },
+        "xbrl_revenue_10y_bn": {
+            str(yr): round(float(rev) / 1e9, 2)
+            for yr, rev in sorted(f.xbrl_revenue_10y.items(), reverse=True)
+        } if f.xbrl_revenue_10y else None,
         "segment_revenue": segments_ctx,
         "historical_statements": stmts,
         "sector_prior": sector_prior,

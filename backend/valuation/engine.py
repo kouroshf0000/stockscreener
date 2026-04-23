@@ -4,7 +4,7 @@ from pydantic import BaseModel, ConfigDict
 
 from backend.comps.engine import CompsResult, run_comps
 from backend.data_providers.fred_client import fetch_risk_free_rate
-from backend.data_providers.yfinance_client import fetch_fundamentals
+from backend.data_providers.yfinance_client import fetch_enriched_fundamentals as fetch_fundamentals
 from backend.news.engine import NewsSentiment, analyze_news
 from backend.nlp.models import RiskOutput
 from backend.nlp.risk_analyzer import analyze_risk
