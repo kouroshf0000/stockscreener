@@ -176,7 +176,7 @@ def _resolve_ticker(issuer: str) -> str | None:
 async def _safe_valuate(ticker: str, timeout: float = 30.0, sem: asyncio.Semaphore | None = None) -> tuple[Decimal | None, Decimal | None, Decimal | None, ValuationStatus]:
     """Returns (upside_pct, implied_price, current_price, status)."""
     async def _run():
-        return await asyncio.wait_for(valuate(ticker), timeout=timeout)
+        return await asyncio.wait_for(valuate(ticker, include_overlays=False), timeout=timeout)
 
     try:
         if sem:

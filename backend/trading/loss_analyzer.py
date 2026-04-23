@@ -170,8 +170,7 @@ Be specific and data-driven. If there are no losing trades, say so clearly and r
         messages=[{"role": "user", "content": prompt}],
         output_format=LossAnalysis,
     )
-    # response.content[0] is a ToolUseBlock; .parsed holds the Pydantic model
-    analysis: LossAnalysis = response.content[0].parsed  # type: ignore[union-attr]
+    analysis: LossAnalysis = response.parsed_output
     return LossAnalysis(
         analyzed_at=datetime.now(timezone.utc).isoformat(),
         total_positions_reviewed=analysis.total_positions_reviewed,
