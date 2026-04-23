@@ -19,7 +19,7 @@ _MIN_UPSIDE_PCT_UNIVERSE = Decimal("0.07")  # DCF upside gate for universe long 
 _MAX_DOWNSIDE_PCT_13F = Decimal("-0.20")    # DCF downside gate for 13F short candidates (≥20% overvalued)
 _MIN_CONVICTION_SCORE = Decimal("5")
 _POSITION_SIZE_USD = Decimal("1000")
-_MAX_CLAUDE_CALLS = 12               # hard cap: ~$0.02/call × 12 = ~$0.24 max per run
+_MAX_CLAUDE_CALLS = 20               # hard cap: ~$0.02/call × 20 = ~$0.40 max per run
 
 
 class TradeCandidate(BaseModel):
@@ -176,7 +176,7 @@ async def generate_signals(
     screen, universe_long_rows, universe_short_rows = await asyncio.gather(
         run_conviction_screener(top_n=top_n),
         run_universe_screen(min_upside_pct=_MIN_UPSIDE_PCT_UNIVERSE),
-        run_short_universe_screen(max_downside_pct=Decimal("-0.15")),
+        run_short_universe_screen(max_downside_pct=Decimal("-0.25")),
     )
 
     seen_tickers: set[str] = set()

@@ -206,10 +206,10 @@ async def run_universe_screen(
     rows: list[ConvictionScreenRow] = []
     for rank, (ticker, snap) in enumerate(dcf_batch, start=1):
         upside, implied, current, status = await _safe_valuate(ticker, timeout=90.0)
-        if status != "ok" or upside is None or upside < min_upside_pct:
+        if status != "ok" or upside is None or upside < min_upside_pct or upside > Decimal("2.0"):
             logger.debug("universe_long_dcf skip %s | status=%s upside=%s", ticker, status, upside)
             continue
-        logger.info("universe_long_pass %s | upside=%.1f%% rsi=%.1f", ticker, float(upside), float(snap.rsi_14 or 0))
+        logger.info("universe_long_pass %s | upside=%.1f%% rsi=%.1f", ticker, float(upside) * 100, float(snap.rsi_14 or 0))
         rows.append(_make_row(rank, ticker, snap, upside, implied, current, status, "universe"))
 
     logger.info("universe_screen | long_dcf_pass=%d/%d", len(rows), len(dcf_batch))
