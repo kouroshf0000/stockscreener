@@ -10,7 +10,7 @@ from pydantic import BaseModel, ConfigDict
 from backend.filings.conviction_screener import ConvictionScreenRow, run_conviction_screener
 from backend.filings.universe_screener import run_short_universe_screen, run_universe_screen
 from backend.nlp.equity_researcher import ReasonedTradeSignal, reason_trade_signal
-from backend.technicals.tv_enrichment import fetch_tv_multiframe
+from backend.technicals.tv_enrichment import fetch_tv_multiframe, tv_screener_exchange
 
 logger = logging.getLogger(__name__)
 
@@ -99,8 +99,9 @@ async def _build_candidate(
         claude_budget[0] -= 1
 
     # Gate 3: Multi-timeframe technicals → Claude reasoning
+    tv_scr, tv_exch = tv_screener_exchange(ticker)
     timeframes = await fetch_tv_multiframe(
-        ticker=ticker, screener=screener, exchange=exchange, strategy=strategy
+        ticker=ticker, screener=tv_scr, exchange=tv_exch, strategy=strategy
     )
     if not timeframes:
         return TradeCandidate(

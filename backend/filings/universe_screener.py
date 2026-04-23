@@ -32,8 +32,8 @@ from backend.technicals.engine import TechnicalSnapshot, compute_technicals
 
 logger = logging.getLogger(__name__)
 
-_RSI_OVERSOLD = Decimal("40")
-_RSI_OVERBOUGHT = Decimal("60")
+_RSI_OVERSOLD = Decimal("50")
+_RSI_OVERBOUGHT = Decimal("50")
 _PASS_TV = {"BUY", "STRONG_BUY"}
 _SHORT_TV = {"SELL", "STRONG_SELL"}
 _WIKI_HEADERS = {
@@ -71,6 +71,35 @@ def _fetch_ndx() -> list[str]:
         return []
     except Exception as e:
         logger.warning("NDX wiki fetch failed: %s", e)
+        return []
+
+
+def _fetch_dax40() -> list[str]:
+    """DAX 40 tickers already in yfinance format (ADS.DE, AIR.PA, etc.)."""
+    try:
+        html = _wiki_html("https://en.wikipedia.org/wiki/DAX")
+        tables = pd.read_html(io.StringIO(html), header=0)
+        for df in tables:
+            if "Ticker" in df.columns:
+                return df["Ticker"].dropna().str.strip().tolist()
+        return []
+    except Exception as e:
+        logger.warning("DAX wiki fetch failed: %s", e)
+        return []
+
+
+def _fetch_ftse100() -> list[str]:
+    """FTSE 100 tickers — Wikipedia TIDMs need .L suffix for yfinance."""
+    try:
+        html = _wiki_html("https://en.wikipedia.org/wiki/FTSE_100")
+        tables = pd.read_html(io.StringIO(html), header=0)
+        for df in tables:
+            if "Ticker" in df.columns:
+                tickers = df["Ticker"].dropna().str.strip().tolist()
+                return [t if t.endswith(".L") else f"{t}.L" for t in tickers]
+        return []
+    except Exception as e:
+        logger.warning("FTSE100 wiki fetch failed: %s", e)
         return []
 
 
@@ -114,11 +143,17 @@ async def _tech_screen_one(
 
 
 async def _fetch_universe() -> list[str]:
-    sp500, ndx = await asyncio.gather(
+    sp500, ndx, dax, ftse = await asyncio.gather(
         asyncio.to_thread(_fetch_sp500),
         asyncio.to_thread(_fetch_ndx),
+        asyncio.to_thread(_fetch_dax40),
+        asyncio.to_thread(_fetch_ftse100),
     )
-    return list(dict.fromkeys(sp500 + ndx))
+    all_tickers = sp500 + ndx + dax + ftse
+    universe = list(dict.fromkeys(all_tickers))
+    logger.info("universe sources | sp500=%d ndx=%d dax=%d ftse=%d unique=%d",
+                len(sp500), len(ndx), len(dax), len(ftse), len(universe))
+    return universe
 
 
 def _make_row(

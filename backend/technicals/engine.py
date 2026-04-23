@@ -13,7 +13,7 @@ from pydantic import BaseModel, ConfigDict
 from backend.app.cache import get_redis
 from backend.app.config import get_settings
 from backend.data_providers.cache import key
-from backend.technicals.tv_enrichment import fetch_tv_analysis
+from backend.technicals.tv_enrichment import fetch_tv_analysis, tv_screener_exchange
 
 logger = logging.getLogger(__name__)
 
@@ -139,9 +139,21 @@ def _compute(symbol: str, hist: pd.DataFrame, spx: pd.DataFrame | None) -> Techn
     )
 
 
-async def compute_technicals(ticker: str) -> TechnicalSnapshot | None:
+async def compute_technicals(
+    ticker: str,
+    screener: str = "auto",
+    exchange: str = "auto",
+) -> TechnicalSnapshot | None:
     settings = get_settings()
     sym = ticker.upper()
+
+    if screener == "auto" or exchange == "auto":
+        _s, _e = tv_screener_exchange(ticker)
+        if screener == "auto":
+            screener = _s
+        if exchange == "auto":
+            exchange = _e
+
     r = get_redis()
     cache_key = key("technicals", sym, date.today().isoformat())
 
@@ -155,7 +167,7 @@ async def compute_technicals(ticker: str) -> TechnicalSnapshot | None:
     hist, spx, tv = await asyncio.gather(
         asyncio.to_thread(_fetch_history, sym),
         asyncio.to_thread(_fetch_history, "SPY"),
-        fetch_tv_analysis(sym),
+        fetch_tv_analysis(sym, screener=screener, exchange=exchange),
     )
     if hist is None or hist.empty:
         return None
