@@ -179,6 +179,10 @@ async def generate_signals(
         run_short_universe_screen(max_downside_pct=Decimal("-0.25")),
     )
 
+    # Let TradingView rate limits reset after ~1300 tech-screen requests before
+    # firing per-candidate multiframe calls.
+    await asyncio.sleep(30)
+
     seen_tickers: set[str] = set()
     candidates: list[TradeCandidate] = []
     claude_budget: list[int] = [_MAX_CLAUDE_CALLS]

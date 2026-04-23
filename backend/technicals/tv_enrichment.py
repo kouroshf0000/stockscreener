@@ -138,20 +138,18 @@ async def fetch_tv_multiframe(
     """
     Swing: 1D + 4H + 1H  |  Day: 4H + 1H + 15m
     Returns dict keyed by interval label — missing intervals omitted.
+    Intervals are fetched sequentially to avoid simultaneous connections from
+    the same IP triggering TradingView rate limits.
     """
     intervals = ["1D", "4H", "1H"] if strategy == "swing" else ["4H", "1H", "15m"]
 
-    tasks = [
-        asyncio.to_thread(_fetch_sync, ticker, screener, exchange, _INTERVAL_MAP[iv])
-        for iv in intervals
-    ]
-    results = await asyncio.gather(*tasks, return_exceptions=True)
-
     out: dict[str, dict] = {}
-    for iv, res in zip(intervals, results):
-        if isinstance(res, dict) and res is not None:
-            out[iv] = res
-        elif isinstance(res, Exception):
-            logger.debug("tv multiframe %s [%s]: %s", ticker, iv, res)
+    for iv in intervals:
+        try:
+            res = await asyncio.to_thread(_fetch_sync, ticker, screener, exchange, _INTERVAL_MAP[iv])
+            if res is not None:
+                out[iv] = res
+        except Exception as e:
+            logger.debug("tv multiframe %s [%s]: %s", ticker, iv, e)
 
     return out
