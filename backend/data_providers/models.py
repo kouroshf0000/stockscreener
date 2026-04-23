@@ -43,6 +43,26 @@ class Fundamentals(BaseModel):
     statements: list[FinancialStatement] = Field(default_factory=list)
     as_of: date
 
+    # TTM ratios (from yfinance info — more current than statement averages)
+    revenue: Decimal | None = None
+    operating_margin: Decimal | None = None
+    revenue_growth: Decimal | None = None      # trailing YoY
+    return_on_equity: Decimal | None = None
+    debt_to_equity: Decimal | None = None
+    pe_ratio: Decimal | None = None            # trailing P/E
+
+    # Analyst consensus (Wall Street sell-side)
+    analyst_target_mean: Decimal | None = None
+    analyst_target_high: Decimal | None = None
+    analyst_target_low: Decimal | None = None
+    analyst_count: int | None = None
+    analyst_recommendation: Decimal | None = None  # 1=Strong Buy … 5=Strong Sell
+    forward_pe: Decimal | None = None              # implied by analyst next-year EPS
+    forward_eps: Decimal | None = None             # next-year EPS consensus
+
+    # Segment revenue breakdown {segment_name: revenue} — populated when available
+    segments: dict[str, Decimal] = Field(default_factory=dict)
+
 
 class Quote(BaseModel):
     model_config = ConfigDict(frozen=True)

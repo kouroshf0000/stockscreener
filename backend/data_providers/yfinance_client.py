@@ -109,6 +109,33 @@ def _build_statements(t: yf.Ticker) -> list[FinancialStatement]:
     return statements
 
 
+def _fetch_segments(t: yf.Ticker) -> dict[str, Any]:
+    """Best-effort segment revenue dict from yfinance. Empty when unavailable."""
+    segs: dict[str, Any] = {}
+    try:
+        rev_by_seg = getattr(t, "revenue_by_geography", None)
+        if rev_by_seg is not None and not rev_by_seg.empty:
+            col = rev_by_seg.columns[0]
+            for seg, val in rev_by_seg[col].items():
+                v = _dec(val)
+                if v is not None:
+                    segs[str(seg)] = v
+    except Exception:
+        pass
+    if not segs:
+        try:
+            rev_by_prod = getattr(t, "revenue_by_product", None)
+            if rev_by_prod is not None and not rev_by_prod.empty:
+                col = rev_by_prod.columns[0]
+                for seg, val in rev_by_prod[col].items():
+                    v = _dec(val)
+                    if v is not None:
+                        segs[str(seg)] = v
+        except Exception:
+            pass
+    return segs
+
+
 @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=0.5, max=4))
 def _fetch_sync(ticker: str) -> Fundamentals:
     t = yf.Ticker(ticker)
@@ -119,6 +146,14 @@ def _fetch_sync(ticker: str) -> Fundamentals:
         price = _dec(getattr(fast, "last_price", None))
     if price is None:
         price = _dec(info.get("currentPrice") or info.get("regularMarketPrice"))
+
+    statements = _build_statements(t)
+    segments = _fetch_segments(t)
+
+    # Analyst count may be int or float from yfinance
+    raw_count = info.get("numberOfAnalystOpinions")
+    analyst_count = int(raw_count) if raw_count is not None else None
+
     return Fundamentals(
         ticker=ticker.upper(),
         name=info.get("shortName") or info.get("longName"),
@@ -128,8 +163,24 @@ def _fetch_sync(ticker: str) -> Fundamentals:
         beta=_dec(info.get("beta")),
         price=price,
         currency=info.get("currency", "USD"),
-        statements=_build_statements(t),
+        statements=statements,
         as_of=date.today(),
+        # TTM ratios
+        revenue=_dec(info.get("totalRevenue")),
+        operating_margin=_dec(info.get("operatingMargins")),
+        revenue_growth=_dec(info.get("revenueGrowth")),
+        return_on_equity=_dec(info.get("returnOnEquity")),
+        debt_to_equity=_dec(info.get("debtToEquity")),
+        pe_ratio=_dec(info.get("trailingPE")),
+        # Analyst consensus
+        analyst_target_mean=_dec(info.get("targetMeanPrice")),
+        analyst_target_high=_dec(info.get("targetHighPrice")),
+        analyst_target_low=_dec(info.get("targetLowPrice")),
+        analyst_count=analyst_count,
+        analyst_recommendation=_dec(info.get("recommendationMean")),
+        forward_pe=_dec(info.get("forwardPE")),
+        forward_eps=_dec(info.get("forwardEps")),
+        segments=segments,
     )
 
 

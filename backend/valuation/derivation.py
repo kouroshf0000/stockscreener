@@ -261,9 +261,16 @@ async def derive_assumptions(
         MAX_TAX,
     )
 
-    # EBIT margin: data-derived, blended with sector prior and bounded by profile
+    # EBIT margin: prefer TTM from yfinance info (more current than 4Y statement avg).
+    # Blend with statement-derived average and sector prior.
     raw_margin = _ebit_margin(f.statements)
-    current_margin = _blend(raw_margin, profile.margin_prior, weight_prior=0.15)
+    ttm_margin = f.operating_margin  # direct from yfinance info
+    if ttm_margin is not None and raw_margin is not None:
+        # 55% TTM actual, 45% multi-year average — captures recent margin shift
+        blended_margin = ttm_margin * Decimal("0.55") + raw_margin * Decimal("0.45")
+    else:
+        blended_margin = ttm_margin if ttm_margin is not None else raw_margin
+    current_margin = _blend(blended_margin, profile.margin_prior, weight_prior=0.15)
     current_margin = _clamp(current_margin, profile.margin_floor, profile.margin_ceiling)
 
     # Terminal margin: data-derived companies don't mean-revert to commodity margins.
@@ -290,18 +297,44 @@ async def derive_assumptions(
         fcf = s0.free_cash_flow
         if ni and eq and eq > 0 and ni > 0:
             roe = ni / eq
-            # Retention: proportion of earnings NOT paid out (proxy via FCF vs NI)
-            retention = Decimal("0.70")  # default when payout unknown
+            retention = Decimal("0.70")
             if fcf is not None and ni > 0:
-                # High FCF/NI → low capex needs → can retain more for growth
                 retention = _clamp(fcf / ni, Decimal("0.30"), Decimal("0.90"))
             sgr = _clamp(roe * retention, Decimal("0.01"), Decimal("0.40"))
 
     if hist_cagr is None:
         hist_cagr = sgr if sgr is not None else terminal
     elif sgr is not None:
-        # Blend 70% historical, 30% sustainable: dampens one-off CAGR spikes
         hist_cagr = hist_cagr * Decimal("0.70") + sgr * Decimal("0.30")
+
+    # Blend in TTM revenue growth signal (most recent 12-month actuals from yfinance).
+    # Captures deceleration/acceleration that a 3Y CAGR smears over.
+    # Weight: 40% recent momentum, 60% historical CAGR.
+    recent_growth = f.revenue_growth  # trailing YoY from yfinance info
+    if recent_growth is not None and hist_cagr is not None:
+        hist_cagr = hist_cagr * Decimal("0.60") + recent_growth * Decimal("0.40")
+    elif recent_growth is not None:
+        hist_cagr = recent_growth
+
+    # Analyst price-target sanity check: if consensus implies very different upside,
+    # nudge growth toward the market's implied expectation (soft adjustment, not override).
+    # Only applies when we have ≥3 analysts and a valid price.
+    analyst_growth_nudge: Decimal | None = None
+    if (
+        f.analyst_target_mean is not None
+        and f.price is not None and f.price > 0
+        and f.analyst_count is not None and f.analyst_count >= 3
+    ):
+        # Analyst-implied compound return over 5 years annualised ≈ a soft growth signal.
+        # If analysts expect the stock to 2x in 5 years (15% pa), they're pricing in
+        # growth far above what pure historicals suggest — nudge our assumption up.
+        implied_return = (float(f.analyst_target_mean) / float(f.price)) - 1.0
+        # 1-year implied return → annualised 5Y signal capped at [−20%, +50%]
+        nudge = Decimal(str(round(max(-0.20, min(0.50, implied_return * 0.3)), 6)))
+        if hist_cagr is not None:
+            # 85% our derivation, 15% analyst-implied nudge
+            analyst_growth_nudge = nudge
+            hist_cagr = hist_cagr * Decimal("0.85") + nudge * Decimal("0.15")
 
     growth = _two_stage_growth(hist_cagr, terminal, HIGH_GROWTH_YEARS, EXPLICIT_YEARS)
     margin_path = _margin_path(current_margin, sector_terminal_margin, EXPLICIT_YEARS)
@@ -327,12 +360,15 @@ async def derive_assumptions(
     provenance = {
         "sector": f"{f.sector or 'unknown'} → profile applied",
         "revenue_growth": (
-            f"2-stage: {HIGH_GROWTH_YEARS}Y flat at blended growth ({hist_cagr:.1%} — "
-            f"70% hist CAGR, 30% ROE×retention SGR={sgr:.1%}), "
-            f"fade to terminal ({terminal:.1%})"
-            if sgr else
-            f"2-stage: {HIGH_GROWTH_YEARS}Y flat at hist CAGR ({hist_cagr:.1%}), "
-            f"fade to terminal ({terminal:.1%})"
+            f"2-stage: {HIGH_GROWTH_YEARS}Y flat at {hist_cagr:.1%} "
+            f"(60% hist CAGR, 40% TTM {recent_growth:.1%}"
+            + (f", SGR={sgr:.1%}" if sgr else "")
+            + (f", analyst nudge={analyst_growth_nudge:.1%} [{f.analyst_count} analysts, target ${float(f.analyst_target_mean):.0f}]" if analyst_growth_nudge is not None else "")
+            + f"), fade to terminal ({terminal:.1%})"
+            if recent_growth is not None else
+            f"2-stage: {HIGH_GROWTH_YEARS}Y flat at {hist_cagr:.1%} "
+            + (f"(70% hist CAGR, 30% SGR={sgr:.1%})" if sgr else "(hist CAGR)")
+            + f", fade to terminal ({terminal:.1%})"
         ),
         "ebit_margin_path": (
             f"current {current_margin:.1%} (data-blended with sector prior {profile.margin_prior:.1%}), "

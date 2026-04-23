@@ -117,18 +117,49 @@ def _build_dcf_context(
             "tax_rate_pct": round(float(s.tax_rate) * 100, 1) if s.tax_rate else None,
         })
 
+    # Analyst target context
+    analyst_ctx = None
+    if f.analyst_target_mean is not None and f.price is not None and f.price > 0:
+        implied_upside = round((float(f.analyst_target_mean) / float(f.price) - 1) * 100, 1)
+        analyst_ctx = {
+            "consensus_target_mean": round(float(f.analyst_target_mean), 2),
+            "consensus_target_high": round(float(f.analyst_target_high), 2) if f.analyst_target_high else None,
+            "consensus_target_low": round(float(f.analyst_target_low), 2) if f.analyst_target_low else None,
+            "implied_upside_to_mean_pct": implied_upside,
+            "analyst_count": f.analyst_count,
+            "recommendation_mean": round(float(f.analyst_recommendation), 2) if f.analyst_recommendation else None,
+            "recommendation_note": "1=Strong Buy, 2=Buy, 3=Hold, 4=Sell, 5=Strong Sell",
+        }
+
+    # Segment breakdown
+    segments_ctx = None
+    if f.segments:
+        total = sum(f.segments.values()) or Decimal("1")
+        segments_ctx = {
+            seg: {
+                "revenue_bn": round(float(rev) / 1e9, 2),
+                "pct_of_total": round(float(rev / total) * 100, 1),
+            }
+            for seg, rev in f.segments.items()
+        }
+
     return json.dumps({
         "ticker": ticker,
         "sector": f.sector or "Unknown",
         "industry": f.industry or "Unknown",
         "market_cap_bn": round(float(f.market_cap) / 1e9, 1) if f.market_cap else None,
+        "current_price": round(float(f.price), 2) if f.price else None,
         "revenue_ttm_bn": round(float(f.revenue) / 1e9, 2) if f.revenue else None,
         "ebit_margin_ttm_pct": round(float(f.operating_margin) * 100, 1) if f.operating_margin else None,
         "revenue_growth_yoy_pct": round(float(f.revenue_growth) * 100, 1) if f.revenue_growth else None,
-        "pe_ratio": round(float(f.pe_ratio), 1) if f.pe_ratio else None,
+        "pe_ratio_trailing": round(float(f.pe_ratio), 1) if f.pe_ratio else None,
+        "pe_ratio_forward": round(float(f.forward_pe), 1) if f.forward_pe else None,
+        "forward_eps": round(float(f.forward_eps), 2) if f.forward_eps else None,
         "return_on_equity_pct": round(float(f.return_on_equity) * 100, 1) if f.return_on_equity else None,
         "debt_to_equity": round(float(f.debt_to_equity), 2) if f.debt_to_equity else None,
         "beta": round(float(f.beta), 2) if f.beta else None,
+        "analyst_consensus": analyst_ctx,
+        "segment_revenue": segments_ctx,
         "historical_statements": stmts,
         "sector_prior": sector_prior,
         "risk_free_rate_pct": round(rfr * 100, 2),
