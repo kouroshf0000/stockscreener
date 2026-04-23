@@ -73,7 +73,16 @@ class Fundamentals(BaseModel):
     analyst_revenue_next_y_low: Decimal | None = None
     analyst_revenue_next_y_high: Decimal | None = None
     analyst_eps_next_y: Decimal | None = None
+    analyst_ebit_next_y: Decimal | None = None
+    analyst_ebitda_next_y: Decimal | None = None
     analyst_revenue_growth_next_y: Decimal | None = None  # derived: next_y / ttm - 1
+    analyst_revenue_growth_path: list[Decimal] = Field(default_factory=list)  # Y1-Y5 consensus
+
+    # FMP price target consensus (more detail than yfinance)
+    fmp_target_consensus: Decimal | None = None
+    fmp_target_high: Decimal | None = None
+    fmp_target_low: Decimal | None = None
+    fmp_target_median: Decimal | None = None
 
     # FRED credit spreads (fraction, e.g. 0.034 = 3.4%)
     credit_spread_hy: Decimal | None = None

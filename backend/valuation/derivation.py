@@ -330,45 +330,51 @@ async def derive_assumptions(
     elif sgr is not None:
         hist_cagr = hist_cagr * Decimal("0.70") + sgr * Decimal("0.30")
 
-    # FMP analyst forward revenue growth — strongest Y1 signal when available.
-    # This is the actual sell-side consensus, not a backward-looking computation.
     fmp_growth = f.analyst_revenue_growth_next_y
+    fmp_path = f.analyst_revenue_growth_path  # list of Y1-Y5 consensus growth rates
     recent_growth = f.revenue_growth  # trailing YoY from yfinance (backward-looking)
 
-    if fmp_growth is not None and hist_cagr is not None:
-        # 50% forward analyst consensus, 35% historical CAGR, 15% TTM momentum
-        ttm_weight = Decimal("0.15") if recent_growth is not None else Decimal("0")
-        ttm_contrib = (recent_growth or Decimal("0")) * ttm_weight
-        hist_cagr = fmp_growth * Decimal("0.50") + hist_cagr * (Decimal("0.50") - ttm_weight) + ttm_contrib
-    elif recent_growth is not None and hist_cagr is not None:
-        # No FMP: 60% historical CAGR, 40% TTM momentum
-        hist_cagr = hist_cagr * Decimal("0.60") + recent_growth * Decimal("0.40")
-    elif fmp_growth is not None:
-        hist_cagr = fmp_growth
-    elif recent_growth is not None:
-        hist_cagr = recent_growth
-
-    # Analyst price-target sanity check: if consensus implies very different upside,
-    # nudge growth toward the market's implied expectation (soft adjustment, not override).
-    # Only applies when we have ≥3 analysts and a valid price.
+    # Price-target nudge using FMP consensus target (preferred) or yfinance mean
     analyst_growth_nudge: Decimal | None = None
+    target_price = f.fmp_target_consensus or f.analyst_target_mean
     if (
-        f.analyst_target_mean is not None
+        target_price is not None
         and f.price is not None and f.price > 0
         and f.analyst_count is not None and f.analyst_count >= 3
     ):
-        # Analyst-implied compound return over 5 years annualised ≈ a soft growth signal.
-        # If analysts expect the stock to 2x in 5 years (15% pa), they're pricing in
-        # growth far above what pure historicals suggest — nudge our assumption up.
-        implied_return = (float(f.analyst_target_mean) / float(f.price)) - 1.0
-        # 1-year implied return → annualised 5Y signal capped at [−20%, +50%]
-        nudge = Decimal(str(round(max(-0.20, min(0.50, implied_return * 0.3)), 6)))
-        if hist_cagr is not None:
-            # 85% our derivation, 15% analyst-implied nudge
-            analyst_growth_nudge = nudge
-            hist_cagr = hist_cagr * Decimal("0.85") + nudge * Decimal("0.15")
+        implied_return = (float(target_price) / float(f.price)) - 1.0
+        analyst_growth_nudge = Decimal(str(round(max(-0.20, min(0.50, implied_return * 0.3)), 6)))
 
-    growth = _two_stage_growth(hist_cagr, terminal, HIGH_GROWTH_YEARS, EXPLICIT_YEARS)
+    if fmp_path and len(fmp_path) >= 3:
+        # BEST CASE: FMP gives us the full Y1-Y5 sell-side revenue consensus path.
+        # Use it directly — this is exactly what Goldman/JPM anchors to.
+        clamped = [_clamp(g, Decimal("-0.20"), Decimal("0.50")) for g in fmp_path[:HIGH_GROWTH_YEARS]]
+        while len(clamped) < HIGH_GROWTH_YEARS:
+            clamped.append(clamped[-1])
+        # Y6-Y10: fade from last consensus year to terminal
+        fade_years = EXPLICIT_YEARS - HIGH_GROWTH_YEARS
+        last = clamped[-1]
+        step = (last - terminal) / Decimal(fade_years) if fade_years > 0 else Decimal("0")
+        growth = list(clamped)
+        for i in range(1, fade_years + 1):
+            growth.append(Decimal(str(round(float(last - step * Decimal(i)), 6))))
+        hist_cagr = clamped[0]  # for provenance logging
+    else:
+        # FALLBACK: blend historical CAGR + TTM momentum + optional FMP Y1
+        if fmp_growth is not None and hist_cagr is not None:
+            ttm_weight = Decimal("0.15") if recent_growth is not None else Decimal("0")
+            ttm_contrib = (recent_growth or Decimal("0")) * ttm_weight
+            hist_cagr = fmp_growth * Decimal("0.50") + hist_cagr * (Decimal("0.50") - ttm_weight) + ttm_contrib
+        elif recent_growth is not None and hist_cagr is not None:
+            hist_cagr = hist_cagr * Decimal("0.60") + recent_growth * Decimal("0.40")
+        elif fmp_growth is not None:
+            hist_cagr = fmp_growth
+        elif recent_growth is not None:
+            hist_cagr = recent_growth
+        # Apply analyst price-target nudge
+        if analyst_growth_nudge is not None and hist_cagr is not None:
+            hist_cagr = hist_cagr * Decimal("0.85") + analyst_growth_nudge * Decimal("0.15")
+        growth = _two_stage_growth(hist_cagr, terminal, HIGH_GROWTH_YEARS, EXPLICIT_YEARS)
     margin_path = _margin_path(current_margin, sector_terminal_margin, EXPLICIT_YEARS)
 
     # Use sector-typical EV/EBITDA as exit multiple fallback when no peer data

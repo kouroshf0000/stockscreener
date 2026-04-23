@@ -213,7 +213,7 @@ async def fetch_enriched_fundamentals(ticker: str) -> Fundamentals:
       4. FRED credit spreads (free, needs FRED_API_KEY)
     All enrichment sources fail gracefully — base fundamentals always returned.
     """
-    from backend.data_providers.fmp_client import fetch_analyst_estimates
+    from backend.data_providers.fmp_client import fetch_analyst_estimates, fetch_price_target_consensus
     from backend.data_providers.sec_xbrl_client import fetch_xbrl_financials
     from backend.data_providers.fred_client import fetch_credit_spreads
     from backend.filings.discovery import resolve_cik
@@ -223,6 +223,7 @@ async def fetch_enriched_fundamentals(ticker: str) -> Fundamentals:
 
     # Run all enrichment sources concurrently
     fmp_task = fetch_analyst_estimates(ticker)
+    fmp_pt_task = fetch_price_target_consensus(ticker)
     spreads_task = fetch_credit_spreads()
 
     # CIK needed for XBRL — resolve first
@@ -234,13 +235,15 @@ async def fetch_enriched_fundamentals(ticker: str) -> Fundamentals:
         xbrl_task = _asyncio.sleep(0, result={})  # type: ignore[assignment]
 
     import asyncio as _asyncio
-    fmp_data, spreads_data, xbrl_data = await _asyncio.gather(
-        fmp_task, spreads_task, xbrl_task, return_exceptions=True
+    fmp_data, fmp_pt_data, spreads_data, xbrl_data = await _asyncio.gather(
+        fmp_task, fmp_pt_task, spreads_task, xbrl_task, return_exceptions=True
     )
 
-    # FMP analyst forward estimates
+    # FMP analyst forward estimates + price targets
     if isinstance(fmp_data, dict) and fmp_data:
         updates.update(fmp_data)
+    if isinstance(fmp_pt_data, dict) and fmp_pt_data:
+        updates.update(fmp_pt_data)
         # Compute forward revenue growth if we have TTM revenue
         rev_next = fmp_data.get("analyst_revenue_next_y")
         ttm_rev = base.revenue
