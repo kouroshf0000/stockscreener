@@ -89,14 +89,15 @@ def _fetch_dax40() -> list[str]:
 
 
 def _fetch_ftse100() -> list[str]:
-    """FTSE 100 tickers — Wikipedia TIDMs need .L suffix for yfinance."""
+    """FTSE 100 tickers — Wikipedia TIDMs need .L suffix for yfinance.
+    TIDMs with dots (e.g. BT.A) must use hyphens in yfinance (BT-A.L)."""
     try:
         html = _wiki_html("https://en.wikipedia.org/wiki/FTSE_100")
         tables = pd.read_html(io.StringIO(html), header=0)
         for df in tables:
             if "Ticker" in df.columns:
                 tickers = df["Ticker"].dropna().str.strip().tolist()
-                return [t if t.endswith(".L") else f"{t}.L" for t in tickers]
+                return [f"{t.replace('.', '-')}.L" if not t.endswith(".L") else t for t in tickers]
         return []
     except Exception as e:
         logger.warning("FTSE100 wiki fetch failed: %s", e)
@@ -108,8 +109,6 @@ def _passes_long(snap: TechnicalSnapshot | None) -> bool:
         return False
     if snap.rsi_14 is None or snap.rsi_14 >= _RSI_OVERSOLD:
         return False
-    if snap.trend != "uptrend":
-        return False
     if snap.tv_recommendation not in _PASS_TV:
         return False
     return True
@@ -119,8 +118,6 @@ def _passes_short(snap: TechnicalSnapshot | None) -> bool:
     if snap is None:
         return False
     if snap.rsi_14 is None or snap.rsi_14 <= _RSI_OVERBOUGHT:
-        return False
-    if snap.trend != "downtrend":
         return False
     if snap.tv_recommendation not in _SHORT_TV:
         return False
@@ -206,12 +203,9 @@ async def run_universe_screen(
     passed.sort(key=lambda x: float(x[1].rsi_14 or 99))
     dcf_batch = passed[:max_dcf]
 
-    dcf_sem = asyncio.Semaphore(1)
     rows: list[ConvictionScreenRow] = []
     for rank, (ticker, snap) in enumerate(dcf_batch, start=1):
-        upside, implied, current, status = await _safe_valuate(
-            ticker, timeout=90.0, sem=dcf_sem
-        )
+        upside, implied, current, status = await _safe_valuate(ticker, timeout=90.0)
         if status != "ok" or upside is None or upside < min_upside_pct:
             logger.debug("universe_long_dcf skip %s | status=%s upside=%s", ticker, status, upside)
             continue
@@ -246,12 +240,9 @@ async def run_short_universe_screen(
     passed.sort(key=lambda x: float(x[1].rsi_14 or 0), reverse=True)
     dcf_batch = passed[:max_dcf]
 
-    dcf_sem = asyncio.Semaphore(1)
     rows: list[ConvictionScreenRow] = []
     for rank, (ticker, snap) in enumerate(dcf_batch, start=1):
-        upside, implied, current, status = await _safe_valuate(
-            ticker, timeout=90.0, sem=dcf_sem
-        )
+        upside, implied, current, status = await _safe_valuate(ticker, timeout=90.0)
         if status != "ok" or upside is None or upside > max_downside_pct:
             logger.debug("universe_short_dcf skip %s | status=%s upside=%s", ticker, status, upside)
             continue

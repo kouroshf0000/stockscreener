@@ -131,6 +131,10 @@ _ETF_KEYWORDS = frozenset({
 
 ValuationStatus = Literal["ok", "ticker_unresolved", "auditor_blocked", "valuation_error", "timeout"]
 
+# Single global semaphore — all callers (conviction + universe) share it so concurrent
+# asyncio.gather runs never issue overlapping yfinance requests (crumb corruption).
+_YFINANCE_SEM = asyncio.Semaphore(1)
+
 
 class ConvictionScreenRow(BaseModel):
     model_config = ConfigDict(frozen=True)
@@ -173,16 +177,13 @@ def _resolve_ticker(issuer: str) -> str | None:
     return ISSUER_TICKER_MAP.get(normalised)
 
 
-async def _safe_valuate(ticker: str, timeout: float = 30.0, sem: asyncio.Semaphore | None = None) -> tuple[Decimal | None, Decimal | None, Decimal | None, ValuationStatus]:
+async def _safe_valuate(ticker: str, timeout: float = 30.0, sem: asyncio.Semaphore = _YFINANCE_SEM) -> tuple[Decimal | None, Decimal | None, Decimal | None, ValuationStatus]:
     """Returns (upside_pct, implied_price, current_price, status)."""
     async def _run():
         return await asyncio.wait_for(valuate(ticker, include_overlays=False), timeout=timeout)
 
     try:
-        if sem:
-            async with sem:
-                bundle = await _run()
-        else:
+        async with sem:
             bundle = await _run()
         dcf = bundle.dcf
         return dcf.upside_pct, dcf.implied_share_price, dcf.current_price, "ok"
@@ -217,11 +218,8 @@ async def run_conviction_screener(
     async def _unresolved() -> tuple[None, None, None, ValuationStatus]:
         return None, None, None, "ticker_unresolved"
 
-    # yfinance uses a shared sync session — concurrent calls corrupt the crumb.
-    # Sequential execution is slower on cold start but avoids auth failures.
-    sem = asyncio.Semaphore(1)
     valuation_tasks = [
-        _safe_valuate(t, timeout=valuation_timeout, sem=sem) if t else _unresolved()
+        _safe_valuate(t, timeout=valuation_timeout) if t else _unresolved()
         for t in tickers
     ]
     valuation_results = await asyncio.gather(*valuation_tasks)
