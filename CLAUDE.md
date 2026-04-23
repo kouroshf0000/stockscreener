@@ -8,6 +8,15 @@
 - **Delete plan files when the work is done.** Stale plan files load every turn.
 - **Run `/compact` after large feature landings** before starting the next task.
 
+## GitHub Actions monitoring rules (context window killers)
+
+- **NEVER use `gh run watch`** — it polls every 3 seconds and writes a full status block each tick, easily generating 50–100 KB of repeated text. It fills the context window fast.
+- **Check run status** with `gh run view <run_id> --repo ... 2>&1 | head -15` — one clean status block.
+- **Check job status** with `gh run view --job=<job_id> --repo ... 2>&1 | head -20`.
+- **Read logs** only after the run completes, with targeted grep: `gh run view --job=<id> --log 2>&1 | grep -E "(pattern1|pattern2)" | head -50`. Never dump raw logs without a grep filter.
+- **Monitor pattern**: trigger run → read status every 2–3 min with `gh run view` until complete → then grep logs once for key signals.
+- **Run `/compact`** after each pipeline run cycle before the next task.
+
 ## Project layout (don't re-explore this each session)
 
 ```
