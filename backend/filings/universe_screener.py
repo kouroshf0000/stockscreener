@@ -158,7 +158,7 @@ async def run_universe_screen(
     universe = await _fetch_universe()
     logger.info("universe_screen | universe=%d tickers", len(universe))
 
-    tech_sem = asyncio.Semaphore(3)
+    tech_sem = asyncio.Semaphore(8)
     snaps = await asyncio.gather(
         *[_tech_screen_one(t, tech_sem, direction="long") for t in universe]
     )
@@ -197,7 +197,7 @@ async def run_short_universe_screen(
     """
     universe = await _fetch_universe()
 
-    tech_sem = asyncio.Semaphore(3)
+    tech_sem = asyncio.Semaphore(8)
     snaps = await asyncio.gather(
         *[_tech_screen_one(t, tech_sem, direction="short") for t in universe]
     )
