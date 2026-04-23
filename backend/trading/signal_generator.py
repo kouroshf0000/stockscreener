@@ -182,8 +182,12 @@ async def generate_signals(
     candidates: list[TradeCandidate] = []
     claude_budget: list[int] = [_MAX_CLAUDE_CALLS]
 
-    # Track A: 13F conviction longs
-    conviction_rows = [r for r in screen.rows if r.ticker is not None and r.status == "ok"]
+    # Track A: 13F conviction longs (only rows with enough upside; overvalued rows go to Track D)
+    conviction_rows = [
+        r for r in screen.rows
+        if r.ticker is not None and r.status == "ok"
+        and r.upside_pct is not None and r.upside_pct >= _MIN_UPSIDE_PCT_13F
+    ]
     for row in conviction_rows:
         candidate = await _build_candidate(
             row, strategy, exchange, screener,
