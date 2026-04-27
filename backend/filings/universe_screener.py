@@ -163,6 +163,25 @@ def _make_row(
     status: ValuationStatus,
     source: str,
 ) -> ConvictionScreenRow:
+    tv_snapshot: dict | None = None
+    if snap.tv_recommendation is not None:
+        tv_snapshot = {
+            "recommendation": snap.tv_recommendation,
+            "rsi": float(snap.rsi_14) if snap.rsi_14 else None,
+            "macd_macd": float(snap.macd) if snap.macd else None,
+            "macd_signal": float(snap.macd_signal) if snap.macd_signal else None,
+            "ema_50": float(snap.sma_50) if snap.sma_50 else None,
+            "ema_200": float(snap.sma_200) if snap.sma_200 else None,
+            "sma_50": float(snap.sma_50) if snap.sma_50 else None,
+            "sma_200": float(snap.sma_200) if snap.sma_200 else None,
+            "bb_upper": float(snap.bb_upper) if snap.bb_upper else None,
+            "bb_lower": float(snap.bb_lower) if snap.bb_lower else None,
+            "bb_pct_b": float(snap.bb_pct_b) if snap.bb_pct_b else None,
+            "adx": float(snap.adx) if snap.adx else None,
+            "atr": float(snap.atr) if snap.atr else None,
+            "close": float(snap.price),
+            "patterns": snap.patterns,
+        }
     return ConvictionScreenRow(
         rank=rank,
         issuer=ticker,
@@ -177,6 +196,7 @@ def _make_row(
         current_price=current,
         status=status,
         source=source,
+        tv_snapshot=tv_snapshot,
     )
 
 

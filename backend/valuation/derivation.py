@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+from datetime import date
 from decimal import Decimal, getcontext
 from typing import NamedTuple
 
@@ -15,6 +16,9 @@ from backend.valuation.models import Assumptions
 from backend.valuation.sector_profiles import SectorProfile, get_profile
 
 getcontext().prec = 28
+
+# Module-level GDP cache — one FRED call per day
+_gdp_cache: tuple[Decimal, date] | None = None
 
 DERIVE_WINDOW = 4
 EXPLICIT_YEARS = 10
@@ -218,6 +222,11 @@ async def _spx_earnings_yield() -> Decimal | None:
 
 
 async def _long_run_nominal_gdp() -> Decimal:
+    global _gdp_cache
+    today = date.today()
+    if _gdp_cache is not None and _gdp_cache[1] == today:
+        return _gdp_cache[0]
+
     settings = get_settings()
     if not settings.fred_api_key:
         return Decimal("0.04")
@@ -247,7 +256,9 @@ async def _long_run_nominal_gdp() -> Decimal:
     if old <= 0 or years <= 0:
         return Decimal("0.04")
     cagr = (recent / old) ** (1.0 / years) - 1.0
-    return Decimal(str(round(max(0.02, min(cagr, 0.06)), 4)))
+    result = Decimal(str(round(max(0.02, min(cagr, 0.06)), 4)))
+    _gdp_cache = (result, today)
+    return result
 
 
 async def derive_assumptions(

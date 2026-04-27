@@ -84,7 +84,27 @@ async def _build_candidate(
             skip_reason=f"conviction score {row.conviction_score} below {_MIN_CONVICTION_SCORE}",
         )
 
-    # Gate 3: Claude call budget check
+    # Gate 3: Multi-timeframe technicals (fall back to cached 1D if multiframe fails)
+    tv_scr, tv_exch = tv_screener_exchange(ticker)
+    timeframes = await fetch_tv_multiframe(
+        ticker=ticker, screener=tv_scr, exchange=tv_exch, strategy=strategy
+    )
+    if not timeframes and row.tv_snapshot is not None:
+        # Universe screener already fetched 1D data — use it rather than blocking
+        logger.info("tv multiframe failed for %s — falling back to cached 1D snapshot", ticker)
+        timeframes = {"1D": row.tv_snapshot}
+    if not timeframes:
+        return TradeCandidate(
+            ticker=ticker,
+            side="no_trade",
+            notional_usd=Decimal("0"),
+            conviction_score=row.conviction_score,
+            upside_pct=row.upside_pct,
+            signal=_null_signal(ticker, strategy),
+            skip_reason="no TradingView data available",
+        )
+
+    # Gate 4: Claude call budget check (decremented only when a real call will be made)
     if claude_budget is not None:
         if claude_budget[0] <= 0:
             return TradeCandidate(
@@ -97,22 +117,6 @@ async def _build_candidate(
                 skip_reason=f"Claude call cap {_MAX_CLAUDE_CALLS} reached",
             )
         claude_budget[0] -= 1
-
-    # Gate 3: Multi-timeframe technicals → Claude reasoning
-    tv_scr, tv_exch = tv_screener_exchange(ticker)
-    timeframes = await fetch_tv_multiframe(
-        ticker=ticker, screener=tv_scr, exchange=tv_exch, strategy=strategy
-    )
-    if not timeframes:
-        return TradeCandidate(
-            ticker=ticker,
-            side="no_trade",
-            notional_usd=Decimal("0"),
-            conviction_score=row.conviction_score,
-            upside_pct=row.upside_pct,
-            signal=_null_signal(ticker, strategy),
-            skip_reason="no TradingView data available",
-        )
 
     signal = await reason_trade_signal(
         ticker=ticker,
@@ -181,7 +185,7 @@ async def generate_signals(
 
     # Let TradingView rate limits reset after ~1300 tech-screen requests before
     # firing per-candidate multiframe calls.
-    await asyncio.sleep(120)
+    await asyncio.sleep(180)
 
     seen_tickers: set[str] = set()
     candidates: list[TradeCandidate] = []

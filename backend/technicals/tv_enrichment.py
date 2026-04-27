@@ -9,6 +9,10 @@ from tradingview_ta import Interval, TA_Handler
 
 logger = logging.getLogger(__name__)
 
+# Serialise per-candidate multiframe calls — after bulk tech-screening TradingView
+# rate-limits the runner IP; running these one-at-a-time with delays lets it recover.
+_MULTIFRAME_SEM = asyncio.Semaphore(1)
+
 _INTERVAL_MAP: dict[str, str] = {
     "1D":  Interval.INTERVAL_1_DAY,
     "4H":  Interval.INTERVAL_4_HOURS,
@@ -138,18 +142,20 @@ async def fetch_tv_multiframe(
     """
     Swing: 1D + 4H + 1H  |  Day: 4H + 1H + 15m
     Returns dict keyed by interval label — missing intervals omitted.
-    Intervals are fetched sequentially to avoid simultaneous connections from
-    the same IP triggering TradingView rate limits.
+    Serialised via _MULTIFRAME_SEM so per-candidate calls never overlap after
+    the bulk tech screen, giving TradingView rate limits time to recover.
     """
     intervals = ["1D", "4H", "1H"] if strategy == "swing" else ["4H", "1H", "15m"]
 
-    out: dict[str, dict] = {}
-    for iv in intervals:
-        try:
-            res = await asyncio.to_thread(_fetch_sync, ticker, screener, exchange, _INTERVAL_MAP[iv])
-            if res is not None:
-                out[iv] = res
-        except Exception as e:
-            logger.debug("tv multiframe %s [%s]: %s", ticker, iv, e)
-
-    return out
+    async with _MULTIFRAME_SEM:
+        out: dict[str, dict] = {}
+        for iv in intervals:
+            try:
+                res = await asyncio.to_thread(_fetch_sync, ticker, screener, exchange, _INTERVAL_MAP[iv])
+                if res is not None:
+                    out[iv] = res
+            except Exception as e:
+                logger.debug("tv multiframe %s [%s]: %s", ticker, iv, e)
+            # Brief pause between interval fetches to avoid rapid-fire requests
+            await asyncio.sleep(2)
+        return out

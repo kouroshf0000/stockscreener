@@ -152,6 +152,8 @@ class ConvictionScreenRow(BaseModel):
     current_price: Decimal | None
     status: ValuationStatus
     source: str = "13f"
+    # 1D TV snapshot carried from universe screener — used as fallback if multiframe fails
+    tv_snapshot: dict | None = None
 
 
 class ConvictionScreenerResponse(BaseModel):

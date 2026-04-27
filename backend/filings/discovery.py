@@ -10,6 +10,10 @@ from backend.filings.fetcher import SUBMISSIONS_URL, TICKER_MAP_URL, http
 
 ARCHIVE_URL_T = "https://www.sec.gov/Archives/edgar/data/{cik_int}/{acc_nodash}/{primary_doc}"
 
+# Module-level cache for the SEC ticker map — one fetch per day, shared across all tickers
+_ticker_map_cache: dict | None = None
+_ticker_map_date: date | None = None
+
 
 class CIKResolution(BaseModel):
     model_config = ConfigDict(frozen=True)
@@ -19,12 +23,20 @@ class CIKResolution(BaseModel):
 
 
 @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=0.5, max=4))
-async def resolve_cik(ticker: str) -> CIKResolution | None:
-    sym = ticker.upper()
+async def _fetch_ticker_map() -> dict:
     r = await http().get(TICKER_MAP_URL)
     r.raise_for_status()
-    data = r.json()
-    for _, row in data.items():
+    return r.json()
+
+
+async def resolve_cik(ticker: str) -> CIKResolution | None:
+    global _ticker_map_cache, _ticker_map_date
+    sym = ticker.upper()
+    today = date.today()
+    if _ticker_map_cache is None or _ticker_map_date != today:
+        _ticker_map_cache = await _fetch_ticker_map()
+        _ticker_map_date = today
+    for _, row in _ticker_map_cache.items():
         if str(row.get("ticker", "")).upper() == sym:
             return CIKResolution(
                 ticker=sym,
