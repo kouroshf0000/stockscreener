@@ -117,6 +117,10 @@ async def test_diagnostics_report_missing_section(monkeypatch: pytest.MonkeyPatc
     fake = _FakeHttp(routes)
     monkeypatch.setattr(discovery, "http", lambda: fake)
     monkeypatch.setattr(fetcher, "http", lambda: fake)
+    # Reset module-level CIK cache so the fake ticker_map is used instead of any cached real data
+    monkeypatch.setattr(discovery, "_ticker_map_cache", None)
+    monkeypatch.setattr(discovery, "_ticker_map_date", None)
+    monkeypatch.setattr(discovery, "_ticker_lookup", {})
 
     diag = await edgar_client.fetch_risk_factors_with_diagnostics("TESTCO")
     assert diag.text is None

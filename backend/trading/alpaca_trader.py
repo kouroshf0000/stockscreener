@@ -125,9 +125,13 @@ async def submit_bracket_order(
     """Submit a bracket market order with take-profit and stop-loss legs."""
     def _submit_bracket() -> OrderResult:
         # 1. Fetch current price via yfinance
-        price = yf.Ticker(ticker.upper()).fast_info.last_price
+        try:
+            price = yf.Ticker(ticker.upper()).fast_info.last_price
+        except Exception as e:
+            logger.warning("submit_bracket_order: price fetch failed for %s (%s), falling back to plain market", ticker, e)
+            return _submit_plain_market(ticker, side, notional_usd)
 
-        # 2. Fall back to plain market order if price is unavailable
+        # 2. Fall back to plain market order if price is unavailable or exceeds notional
         if price is None or price <= 0:
             logger.warning(
                 "submit_bracket_order: could not get price for %s, falling back to plain market order",
@@ -135,8 +139,16 @@ async def submit_bracket_order(
             )
             return _submit_plain_market(ticker, side, notional_usd)
 
-        # 3. Compute quantity and bracket prices — must be whole shares for bracket orders
-        qty = max(1, math.floor(float(notional_usd) / price))
+        # 3. Compute quantity — bracket orders require whole shares.
+        #    If price > notional, use fractional-share plain market order instead.
+        qty_floor = math.floor(float(notional_usd) / price)
+        if qty_floor < 1:
+            logger.info(
+                "submit_bracket_order: %s price $%.2f > notional $%s, using plain market (fractional)",
+                ticker, price, notional_usd,
+            )
+            return _submit_plain_market(ticker, side, notional_usd)
+        qty = qty_floor
 
         if side == "buy":
             stop_price = round(price * (1 - stop_loss_pct / 100), 2)

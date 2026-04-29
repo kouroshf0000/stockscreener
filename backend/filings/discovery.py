@@ -10,9 +10,11 @@ from backend.filings.fetcher import SUBMISSIONS_URL, TICKER_MAP_URL, http
 
 ARCHIVE_URL_T = "https://www.sec.gov/Archives/edgar/data/{cik_int}/{acc_nodash}/{primary_doc}"
 
-# Module-level cache for the SEC ticker map — one fetch per day, shared across all tickers
+# Module-level cache for the SEC ticker map — one fetch per day, shared across all tickers.
+# _ticker_lookup is a pre-built uppercase-ticker → CIKResolution dict for O(1) lookups.
 _ticker_map_cache: dict | None = None
 _ticker_map_date: date | None = None
+_ticker_lookup: dict[str, CIKResolution] = {}
 
 
 class CIKResolution(BaseModel):
@@ -30,20 +32,23 @@ async def _fetch_ticker_map() -> dict:
 
 
 async def resolve_cik(ticker: str) -> CIKResolution | None:
-    global _ticker_map_cache, _ticker_map_date
+    global _ticker_map_cache, _ticker_map_date, _ticker_lookup
     sym = ticker.upper()
     today = date.today()
     if _ticker_map_cache is None or _ticker_map_date != today:
         _ticker_map_cache = await _fetch_ticker_map()
         _ticker_map_date = today
-    for _, row in _ticker_map_cache.items():
-        if str(row.get("ticker", "")).upper() == sym:
-            return CIKResolution(
-                ticker=sym,
+        # Build O(1) reverse-lookup dict once per day
+        _ticker_lookup = {
+            str(row.get("ticker", "")).upper(): CIKResolution(
+                ticker=str(row.get("ticker", "")).upper(),
                 cik=f"{int(row['cik_str']):010d}",
-                title=row.get("title", sym),
+                title=row.get("title", str(row.get("ticker", ""))),
             )
-    return None
+            for row in _ticker_map_cache.values()
+            if row.get("ticker")
+        }
+    return _ticker_lookup.get(sym)
 
 
 def _archive_url(cik: str, accession: str, primary_doc: str) -> str:

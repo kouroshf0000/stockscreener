@@ -32,8 +32,8 @@ from backend.technicals.engine import TechnicalSnapshot, compute_technicals
 
 logger = logging.getLogger(__name__)
 
-_RSI_OVERSOLD = Decimal("50")
-_RSI_OVERBOUGHT = Decimal("50")
+_RSI_OVERSOLD = Decimal("40")   # long gate: RSI must be strictly below 40 (oversold)
+_RSI_OVERBOUGHT = Decimal("60") # short gate: RSI must be strictly above 60 (overbought)
 _PASS_TV = {"BUY", "STRONG_BUY"}
 _SHORT_TV = {"SELL", "STRONG_SELL"}
 _WIKI_HEADERS = {
@@ -111,6 +111,8 @@ def _passes_long(snap: TechnicalSnapshot | None) -> bool:
         return False
     if snap.tv_recommendation not in _PASS_TV:
         return False
+    if snap.trend == "downtrend":
+        return False
     return True
 
 
@@ -120,6 +122,8 @@ def _passes_short(snap: TechnicalSnapshot | None) -> bool:
     if snap.rsi_14 is None or snap.rsi_14 <= _RSI_OVERBOUGHT:
         return False
     if snap.tv_recommendation not in _SHORT_TV:
+        return False
+    if snap.trend == "uptrend":
         return False
     return True
 
@@ -203,11 +207,14 @@ def _make_row(
 async def run_universe_screen(
     min_upside_pct: Decimal = Decimal("0.07"),  # stored as fraction: 0.07 = 7%
     max_dcf: int = 30,
+    universe: list[str] | None = None,
 ) -> list[ConvictionScreenRow]:
     """
     Long candidates: RSI < 40, uptrend, BUY/STRONG_BUY, DCF upside ≥ min_upside_pct.
+    Pass universe to avoid a redundant Wikipedia scrape when called alongside run_short_universe_screen.
     """
-    universe = await _fetch_universe()
+    if universe is None:
+        universe = await _fetch_universe()
     logger.info("universe_screen | universe=%d tickers", len(universe))
 
     tech_sem = asyncio.Semaphore(4)
@@ -239,12 +246,15 @@ async def run_universe_screen(
 async def run_short_universe_screen(
     max_downside_pct: Decimal = Decimal("-0.15"),  # DCF says ≥15% overvalued
     max_dcf: int = 20,
+    universe: list[str] | None = None,
 ) -> list[ConvictionScreenRow]:
     """
     Short candidates: RSI > 60, downtrend, SELL/STRONG_SELL, DCF upside ≤ max_downside_pct.
     Returns rows with negative upside_pct (overvalued = short setup).
+    Pass universe to avoid a redundant Wikipedia scrape when called alongside run_universe_screen.
     """
-    universe = await _fetch_universe()
+    if universe is None:
+        universe = await _fetch_universe()
 
     tech_sem = asyncio.Semaphore(4)
     snaps = await asyncio.gather(

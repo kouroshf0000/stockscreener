@@ -8,7 +8,11 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict
 
 from backend.filings.conviction_screener import ConvictionScreenRow, run_conviction_screener
-from backend.filings.universe_screener import run_short_universe_screen, run_universe_screen
+from backend.filings.universe_screener import (
+    run_short_universe_screen,
+    run_universe_screen,
+    _fetch_universe,
+)
 from backend.nlp.equity_researcher import ReasonedTradeSignal, reason_trade_signal
 from backend.technicals.tv_enrichment import fetch_tv_multiframe, tv_screener_exchange
 
@@ -177,10 +181,12 @@ async def generate_signals(
       Track D — 13F conviction shorts  (DCF overvalued ≥20% — evaluated by Claude for short signal)
     All screeners run concurrently; Claude calls run sequentially.
     """
+    # Fetch universe once — both screeners share it to avoid duplicate Wikipedia scrapes
+    universe = await _fetch_universe()
     screen, universe_long_rows, universe_short_rows = await asyncio.gather(
         run_conviction_screener(top_n=top_n),
-        run_universe_screen(min_upside_pct=_MIN_UPSIDE_PCT_UNIVERSE),
-        run_short_universe_screen(max_downside_pct=Decimal("-0.25")),
+        run_universe_screen(min_upside_pct=_MIN_UPSIDE_PCT_UNIVERSE, universe=universe),
+        run_short_universe_screen(max_downside_pct=Decimal("-0.25"), universe=universe),
     )
 
     # Let TradingView rate limits reset after ~1300 tech-screen requests before
@@ -192,11 +198,26 @@ async def generate_signals(
     claude_budget: list[int] = [_MAX_CLAUDE_CALLS]
 
     # Track A: 13F conviction longs (only rows with enough upside; overvalued rows go to Track D)
-    conviction_rows = [
-        r for r in screen.rows
-        if r.ticker is not None and r.status == "ok"
-        and r.upside_pct is not None and r.upside_pct >= _MIN_UPSIDE_PCT_13F
-    ]
+    # Rows below long threshold but not deep enough to short are tracked as no_trade so skipped_count is accurate.
+    conviction_rows = []
+    for r in screen.rows:
+        if r.ticker is None or r.status != "ok":
+            continue
+        if r.upside_pct is None or r.upside_pct < _MIN_UPSIDE_PCT_13F:
+            if r.upside_pct is None or r.upside_pct > _MAX_DOWNSIDE_PCT_13F:
+                candidates.append(TradeCandidate(
+                    ticker=r.ticker,
+                    side="no_trade",
+                    notional_usd=Decimal("0"),
+                    conviction_score=r.conviction_score,
+                    upside_pct=r.upside_pct,
+                    signal=_null_signal(r.ticker, strategy),
+                    skip_reason=f"upside {float(r.upside_pct or 0)*100:.1f}% below {float(_MIN_UPSIDE_PCT_13F)*100:.0f}% threshold",
+                ))
+                if r.ticker:
+                    seen_tickers.add(r.ticker)
+            continue
+        conviction_rows.append(r)
     for row in conviction_rows:
         candidate = await _build_candidate(
             row, strategy, exchange, screener,

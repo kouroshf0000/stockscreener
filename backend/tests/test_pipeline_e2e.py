@@ -635,10 +635,11 @@ class TestSubmitBracketOrder:
 # ── TV retry ──────────────────────────────────────────────────────────────────
 
 class TestTVRetry:
-    def test_retries_3_times_on_failure(self) -> None:
-        from backend.technicals.tv_enrichment import _fetch_sync
+    def test_retries_on_failure_exhausts_all_exchanges(self) -> None:
+        from backend.technicals.tv_enrichment import _fetch_sync, _EXCHANGE_FALLBACKS
 
         call_count = 0
+        expected_calls = len(_EXCHANGE_FALLBACKS.get("america", [])) * 2  # 2 attempts per exchange
 
         def _flaky_handler(*args, **kwargs):
             nonlocal call_count
@@ -649,7 +650,7 @@ class TestTVRetry:
             result = _fetch_sync("AAPL", "america", "NASDAQ", "1D")
 
         assert result is None
-        assert call_count == 3
+        assert call_count == expected_calls
 
     def test_returns_on_first_success(self) -> None:
         from backend.technicals.tv_enrichment import _fetch_sync
@@ -862,11 +863,8 @@ class TestLossAnalyzerParsedAccessor:
             market_regime_note="Market neutral.",
         )
 
-        # Simulate response.content[0].parsed
-        mock_content_block = MagicMock()
-        mock_content_block.parsed = fake_analysis
         mock_response = MagicMock()
-        mock_response.content = [mock_content_block]
+        mock_response.parsed_output = fake_analysis
 
         mock_anthropic = MagicMock()
         mock_anthropic.messages.parse = AsyncMock(return_value=mock_response)
@@ -885,10 +883,10 @@ class TestLossAnalyzerParsedAccessor:
     @pytest.mark.asyncio
     async def test_no_thinking_param_sent(self) -> None:
         """Ensure thinking is NOT passed — it breaks output_format structured output."""
-        from backend.trading.loss_analyzer import analyze_losses
+        from backend.trading.loss_analyzer import LossAnalysis, analyze_losses
 
-        mock_content_block = MagicMock()
-        mock_content_block.parsed = MagicMock(
+        fake_la = LossAnalysis(
+            analyzed_at="2026-04-22T00:00:00+00:00",
             total_positions_reviewed=0,
             losing_positions=0,
             avg_unrealized_pnl_pct=0.0,
@@ -898,7 +896,7 @@ class TestLossAnalyzerParsedAccessor:
             market_regime_note="neutral",
         )
         mock_response = MagicMock()
-        mock_response.content = [mock_content_block]
+        mock_response.parsed_output = fake_la
 
         mock_parse = AsyncMock(return_value=mock_response)
         mock_anthropic = MagicMock()

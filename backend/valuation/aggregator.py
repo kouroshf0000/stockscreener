@@ -323,7 +323,7 @@ async def build_blended_target(
 
     return BlendedTarget(
         price=blended,
-        upside_pct=upside.quantize(Decimal("0.0001")) if upside else None,
+        upside_pct=upside.quantize(Decimal("0.0001")) if upside is not None else None,
         current_price=current_price,
         rating=rating,
         confidence=confidence,

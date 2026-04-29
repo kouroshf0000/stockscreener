@@ -6,6 +6,7 @@ from datetime import date
 from decimal import Decimal
 
 import pytest
+from unittest.mock import AsyncMock
 
 from backend.filings import thirteenf
 
@@ -138,6 +139,8 @@ async def test_fetch_hedge_fund_digests_builds_position_and_delta_summary(
     monkeypatch.setattr(thirteenf, "fetch_dataset_catalog", _catalog)
     monkeypatch.setattr(thirteenf, "_fetch_zip_bytes", _zip_bytes)
     monkeypatch.setattr(thirteenf, "WATCHLIST", thirteenf.WATCHLIST[:1])
+    monkeypatch.setattr(thirteenf, "_supabase_cache_get", AsyncMock(return_value=None))
+    monkeypatch.setattr(thirteenf, "_supabase_cache_set", AsyncMock())
 
     result = await thirteenf.fetch_hedge_fund_digests(limit=1, top_positions=2)
 
@@ -197,6 +200,8 @@ async def test_shares_change_pct_computed(
     monkeypatch.setattr(thirteenf, "fetch_dataset_catalog", _catalog)
     monkeypatch.setattr(thirteenf, "_fetch_zip_bytes", _zip_bytes)
     monkeypatch.setattr(thirteenf, "WATCHLIST", thirteenf.WATCHLIST[:1])
+    monkeypatch.setattr(thirteenf, "_supabase_cache_get", AsyncMock(return_value=None))
+    monkeypatch.setattr(thirteenf, "_supabase_cache_set", AsyncMock())
 
     result = await thirteenf.fetch_hedge_fund_digests(limit=1, top_positions=1)
     manager = result.managers[0]
@@ -234,6 +239,8 @@ async def test_filing_lag_and_amendment_flag(
     monkeypatch.setattr(thirteenf, "fetch_dataset_catalog", _catalog)
     monkeypatch.setattr(thirteenf, "_fetch_zip_bytes", _zip_bytes)
     monkeypatch.setattr(thirteenf, "WATCHLIST", thirteenf.WATCHLIST[:1])
+    monkeypatch.setattr(thirteenf, "_supabase_cache_get", AsyncMock(return_value=None))
+    monkeypatch.setattr(thirteenf, "_supabase_cache_set", AsyncMock())
 
     result = await thirteenf.fetch_hedge_fund_digests(limit=1, top_positions=1)
     manager = result.managers[0]

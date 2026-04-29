@@ -48,6 +48,8 @@ async def test_fred_parses_observation(monkeypatch: pytest.MonkeyPatch) -> None:
 
     settings = fred_client.get_settings()
     monkeypatch.setattr(settings, "fred_api_key", "testkey", raising=False)
+    # Reset module-level daily cache so the mocked HTTP client is actually called
+    monkeypatch.setattr(fred_client, "_daily_cache", {})
 
     rfr = await fred_client.fetch_risk_free_rate()
     assert rfr.rate == Decimal("0.0427")
